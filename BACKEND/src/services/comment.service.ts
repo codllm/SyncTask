@@ -1,4 +1,7 @@
 import CommentModel from "../model/comment.model";
+import TaskModel from "../model/task.model";
+import { createNotification } from "./notification.service";
+import { emitToProject } from "./socket";
 
 export const createCommentService = async (
   content: string,
@@ -12,7 +15,49 @@ export const createCommentService = async (
     user: userId,
   });
 
-  return comment;
+  const populatedComment = await CommentModel.findById(comment._id)
+    .populate("user", "username email");
+
+  if (!populatedComment) {
+    throw new Error("Failed to populate created comment");
+  }
+
+  const task = await TaskModel.findById(taskId);
+  if (task) {
+    const title = "New Comment on Task";
+    const message = `A comment was added to task "${task.title}"`;
+    const link = `/projects/${task.project}/tasks/${task._id}`;
+
+    emitToProject(task.project.toString(), "comment:created", populatedComment);
+
+    if (task.assignedTo && task.assignedTo.toString() !== userId.toString()) {
+      await createNotification({
+        recipient: task.assignedTo.toString(),
+        sender: userId,
+        type: "COMMENT_ADDED",
+        title,
+        message,
+        link,
+      });
+    }
+
+    if (
+      task.createdBy &&
+      task.createdBy.toString() !== userId.toString() &&
+      (!task.assignedTo || task.assignedTo.toString() !== task.createdBy.toString())
+    ) {
+      await createNotification({
+        recipient: task.createdBy.toString(),
+        sender: userId,
+        type: "COMMENT_ADDED",
+        title,
+        message,
+        link,
+      });
+    }
+  }
+
+  return populatedComment;
 };
 
 export const getTaskCommentsService = async (
@@ -32,5 +77,16 @@ export const deleteCommentService = async (
   commentId: string
 ) => {
 
-  return await CommentModel.findByIdAndDelete(commentId);
+  const comment = await CommentModel.findById(commentId).populate("task");
+  if (!comment) {
+    throw new Error("Comment not found");
+  }
+
+  await CommentModel.findByIdAndDelete(commentId);
+
+  if (comment.task) {
+    emitToProject((comment.task as any).project.toString(), "comment:deleted", { commentId });
+  }
+
+  return comment;
 };

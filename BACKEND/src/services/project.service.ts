@@ -4,6 +4,7 @@ import mongoose from "mongoose";
 
 import Project from "../model/project.model";
 import Workspace from "../model/workspace.model";
+import { createNotification } from "./notification.service";
 
 
 // CREATE PROJECT
@@ -46,6 +47,21 @@ export const createProject = async ({
       },
     ],
   });
+
+  const otherMembers = workspaceExists.members.filter(
+    (m) => m.user.toString() !== createdBy.toString()
+  );
+
+  for (const member of otherMembers) {
+    await createNotification({
+      recipient: member.user.toString(),
+      sender: createdBy.toString(),
+      type: "PROJECT_ADDED",
+      title: "New Project Added",
+      message: `A new project "${project.name}" was added to workspace "${workspaceExists.name}"`,
+      link: `/projects/${project._id}`,
+    });
+  }
 
   return project;
 };

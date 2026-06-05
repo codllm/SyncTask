@@ -2,6 +2,7 @@
 import Workspace from "../model/workspace.model";
 import Project from "../model/project.model";
 import mongoose from "mongoose";
+import { createNotification } from "./notification.service";
 
 interface CreateWorkspacePayload {
   name: string;
@@ -107,7 +108,8 @@ export const updateWorkspace = async ({
 
 export const addUserToWorkspace = async (
   workspaceId: string,
-  userId: string
+  userId: string,
+  inviterId?: string
 ) => {
 
   const workspace = await Workspace.findById(
@@ -133,6 +135,15 @@ export const addUserToWorkspace = async (
   });
 
   await workspace.save();
+
+  await createNotification({
+    recipient: userId,
+    sender: inviterId || workspace.owner.toString(),
+    type: "WORKSPACE_INVITE",
+    title: "Workspace Invitation",
+    message: `You have been added to the workspace: "${workspace.name}"`,
+    link: `/workspaces/${workspace._id}`,
+  });
 
   return workspace;
 };
