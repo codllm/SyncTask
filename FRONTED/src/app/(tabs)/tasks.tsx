@@ -227,6 +227,8 @@ const TaskCard = ({
   task,
   themeColor,
   onPress,
+  onCommentPress,
+  onAttachmentPress,
   onDragStart,
   isDragging,
   isBlocked,
@@ -234,6 +236,8 @@ const TaskCard = ({
   task: Task;
   themeColor: string;
   onPress: () => void;
+  onCommentPress?: (task: Task) => void;
+  onAttachmentPress?: (task: Task) => void;
   onDragStart?: (task: Task, pageX: number, pageY: number) => void;
   isDragging?: boolean;
   isBlocked?: boolean;
@@ -251,81 +255,85 @@ const TaskCard = ({
   const isDueSoon = dueTime && diffTime > 0 && diffTime <= 24 * 60 * 60 * 1000 && !isCompleted;
 
   return (
-    <TouchableOpacity
-      onPress={onPress}
-      activeOpacity={0.7}
+    <View
       style={[s.card, isCompleted && s.cardCompleted, isDragging && s.cardDragging]}
     >
-      {/* Top row: tags + due date */}
-      <View style={s.cardTopRow}>
-        <View style={[s.row, { gap: 6, flexWrap: "wrap", flex: 1 }]}>
-          {onDragStart && !isDragging && (
-            <View
-              onTouchStart={(e) => onDragStart(task, e.nativeEvent.pageX, e.nativeEvent.pageY)}
-              style={s.grabHandle}
-            >
-              <Ionicons name="reorder-two-outline" size={12} color={C.textMuted} />
-            </View>
-          )}
-          <PriorityBadge priority={task.priority} />
-          {isBlocked && (
-            <View style={s.blockedBadge}>
-              <Ionicons name="lock-closed" size={9} color={C.danger} />
-              <Text style={s.blockedBadgeText}>Blocked</Text>
-            </View>
-          )}
-          {task.recurring?.isRecurring && (
-            <View style={s.recurringBadge}>
-              <Ionicons name="sync" size={9} color={C.accent} />
-              <Text style={s.recurringBadgeText}>{task.recurring.frequency}</Text>
-            </View>
-          )}
-        </View>
-        {task.dueDate ? (
-          <View style={s.dueDateRow}>
-            <Ionicons
-              name="calendar-outline"
-              size={11}
-              color={isOverdue ? C.danger : isDueSoon ? C.warn : C.textMuted}
-            />
-            <Text style={[s.dueDateText, { color: isOverdue ? C.danger : isDueSoon ? C.warn : C.textMuted }]}>
-              {formatDate(task.dueDate)}
-            </Text>
-          </View>
-        ) : null}
-      </View>
-
-      {/* Title + description */}
-      <Text style={[s.cardTitle, isCompleted && s.cardTitleStrike]} numberOfLines={2}>
-        {task.title}
-      </Text>
-      {task.description ? (
-        <Text style={s.cardDesc} numberOfLines={1}>{task.description}</Text>
-      ) : null}
-
-      {/* Labels */}
-      {Array.isArray(task.labels) && task.labels.length > 0 && (
-        <View style={[s.row, { flexWrap: "wrap", gap: 4, marginBottom: 8 }]}>
-          {task.labels.map((label, index) => {
-            const colors = getLabelColor(label);
-            return (
-              <View key={index} style={[s.labelChip, { backgroundColor: colors.bg }]}>
-                <Text style={[s.labelChipText, { color: colors.text }]}>{label}</Text>
+      <TouchableOpacity
+        onPress={onPress}
+        activeOpacity={0.7}
+        style={{ width: "100%" }}
+      >
+        {/* Top row: tags + due date */}
+        <View style={s.cardTopRow}>
+          <View style={[s.row, { gap: 6, flexWrap: "wrap", flex: 1 }]}>
+            {onDragStart && !isDragging && (
+              <View
+                onTouchStart={(e) => onDragStart(task, e.nativeEvent.pageX, e.nativeEvent.pageY)}
+                style={s.grabHandle}
+              >
+                <Ionicons name="reorder-two-outline" size={12} color={C.textMuted} />
               </View>
-            );
-          })}
-        </View>
-      )}
-
-      {/* Progress bar */}
-      {subtaskTotal > 0 && (
-        <View style={s.progressArea}>
-          <View style={s.progressTrack}>
-            <View style={[s.progressFill, { width: `${progress * 100}%` }]} />
+            )}
+            <PriorityBadge priority={task.priority} />
+            {isBlocked && (
+              <View style={s.blockedBadge}>
+                <Ionicons name="lock-closed" size={9} color={C.danger} />
+                <Text style={s.blockedBadgeText}>Blocked</Text>
+              </View>
+            )}
+            {task.recurring?.isRecurring && (
+              <View style={s.recurringBadge}>
+                <Ionicons name="sync" size={9} color={C.accent} />
+                <Text style={s.recurringBadgeText}>{task.recurring.frequency}</Text>
+              </View>
+            )}
           </View>
-          <Text style={s.progressCount}>{subtaskDone}/{subtaskTotal}</Text>
+          {task.dueDate ? (
+            <View style={s.dueDateRow}>
+              <Ionicons
+                name="calendar-outline"
+                size={11}
+                color={isOverdue ? C.danger : isDueSoon ? C.warn : C.textMuted}
+              />
+              <Text style={[s.dueDateText, { color: isOverdue ? C.danger : isDueSoon ? C.warn : C.textMuted }]}>
+                {formatDate(task.dueDate)}
+              </Text>
+            </View>
+          ) : null}
         </View>
-      )}
+
+        {/* Title + description */}
+        <Text style={[s.cardTitle, isCompleted && s.cardTitleStrike]} numberOfLines={2}>
+          {task.title}
+        </Text>
+        {task.description ? (
+          <Text style={s.cardDesc} numberOfLines={1}>{task.description}</Text>
+        ) : null}
+
+        {/* Labels */}
+        {Array.isArray(task.labels) && task.labels.length > 0 && (
+          <View style={[s.row, { flexWrap: "wrap", gap: 4, marginBottom: 8 }]}>
+            {task.labels.map((label, index) => {
+              const colors = getLabelColor(label);
+              return (
+                <View key={index} style={[s.labelChip, { backgroundColor: colors.bg }]}>
+                  <Text style={[s.labelChipText, { color: colors.text }]}>{label}</Text>
+                </View>
+              );
+            })}
+          </View>
+        )}
+
+        {/* Progress bar */}
+        {subtaskTotal > 0 && (
+          <View style={s.progressArea}>
+            <View style={s.progressTrack}>
+              <View style={[s.progressFill, { width: `${progress * 100}%` }]} />
+            </View>
+            <Text style={s.progressCount}>{subtaskDone}/{subtaskTotal}</Text>
+          </View>
+        )}
+      </TouchableOpacity>
 
       {/* Footer */}
       <View style={s.cardFooter}>
@@ -337,13 +345,45 @@ const TaskCard = ({
             <Text style={s.unassignedText}>Unassigned</Text>
           </View>
         )}
-        {Array.isArray((task as any).comments) && (task as any).comments?.length > 0 ? (
-          <View style={s.row}>
-            <Ionicons name="chatbubble-outline" size={11} color={C.textMuted} />
-          </View>
-        ) : null}
+        <View style={[s.row, { gap: 14 }]}>
+          <TouchableOpacity
+            style={s.cardIconBtn}
+            onPress={(e) => {
+              if (e && typeof e.stopPropagation === "function") {
+                e.stopPropagation();
+              }
+              onCommentPress && onCommentPress(task);
+            }}
+            activeOpacity={0.6}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <Ionicons name="chatbubble-outline" size={13} color={C.textSecondary} />
+            {((task.commentsCount !== undefined ? task.commentsCount : (task as any).comments?.length) || 0) > 0 ? (
+              <Text style={s.cardIconText}>
+                {task.commentsCount !== undefined ? task.commentsCount : (task as any).comments?.length}
+              </Text>
+            ) : null}
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={s.cardIconBtn}
+            onPress={(e) => {
+              if (e && typeof e.stopPropagation === "function") {
+                e.stopPropagation();
+              }
+              onAttachmentPress && onAttachmentPress(task);
+            }}
+            activeOpacity={0.6}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <Ionicons name="document-attach-outline" size={13} color={C.textSecondary} />
+            {Array.isArray(task.attachments) && task.attachments.length > 0 ? (
+              <Text style={s.cardIconText}>{task.attachments.length}</Text>
+            ) : null}
+          </TouchableOpacity>
+        </View>
       </View>
-    </TouchableOpacity>
+    </View>
   );
 };
 
@@ -361,6 +401,8 @@ const SwipeableKanbanBoard = ({
   allTasks,
   themeColor,
   onCardPress,
+  onCommentPress,
+  onAttachmentPress,
   onDragStart,
   hoverStatus,
   hoverIndex,
@@ -373,12 +415,14 @@ const SwipeableKanbanBoard = ({
   allTasks: Task[];
   themeColor: string;
   onCardPress: (task: Task) => void;
+  onCommentPress: (task: Task) => void;
+  onAttachmentPress: (task: Task) => void;
   onDragStart: (task: Task, pageX: number, pageY: number) => void;
   hoverStatus: string | null;
   hoverIndex: number;
   activePage: number;
   onPageChange: (page: number) => void;
-  scrollRef: React.RefObject<ScrollView>;
+  scrollRef: React.RefObject<ScrollView | null>;
 }) => {
   const handleMomentumEnd = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
     const page = Math.round(e.nativeEvent.contentOffset.x / SCREEN_WIDTH);
@@ -467,6 +511,8 @@ const SwipeableKanbanBoard = ({
                             task={task}
                             themeColor={themeColor}
                             onPress={() => onCardPress(task)}
+                            onCommentPress={onCommentPress}
+                            onAttachmentPress={onAttachmentPress}
                             onDragStart={onDragStart}
                             isBlocked={isBlocked}
                           />
@@ -736,6 +782,17 @@ export default function TasksScreen() {
   const [createModalVisible, setCreateModalVisible] = useState(false);
   const [detailModalVisible, setDetailModalVisible] = useState(false);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
+  const [commentsModalVisible, setCommentsModalVisible] = useState(false);
+  const [attachmentsModalVisible, setAttachmentsModalVisible] = useState(false);
+  
+  console.log("[DEBUG] TasksScreen Render:", {
+    selectedTaskId: selectedTask?._id,
+    selectedTaskTitle: selectedTask?.title,
+    commentsModalVisible,
+    attachmentsModalVisible,
+    detailModalVisible
+  });
+
   const estHours = selectedTask?.estimatedHours || 0;
   const [isEditingDesc, setIsEditingDesc] = useState(false);
   const [editDescText, setEditDescText] = useState("");
@@ -1926,6 +1983,19 @@ export default function TasksScreen() {
     }
   };
 
+  const openCommentsView = async (task: Task) => {
+    console.log("[DEBUG] openCommentsView called with:", task?._id, task?.title);
+    setSelectedTask(task);
+    setCommentsModalVisible(true);
+    await loadComments(task._id);
+  };
+
+  const openAttachmentsView = (task: Task) => {
+    console.log("[DEBUG] openAttachmentsView called with:", task?._id, task?.title);
+    setSelectedTask(task);
+    setAttachmentsModalVisible(true);
+  };
+
   const [isPinned, setIsPinned] = useState(false);
 
   const openTaskDetail = async (task: Task) => {
@@ -2524,6 +2594,8 @@ export default function TasksScreen() {
             allTasks={tasks}
             themeColor={themeColor}
             onCardPress={openTaskDetail}
+            onCommentPress={openCommentsView}
+            onAttachmentPress={openAttachmentsView}
             onDragStart={handleDragStart}
             hoverStatus={hoverStatus}
             hoverIndex={hoverIndex}
@@ -3250,51 +3322,7 @@ export default function TasksScreen() {
                   </View>
                 )}
 
-                {/* Attachments */}
-                <SectionLabel>Attachments</SectionLabel>
-                {selectedTask.attachments && selectedTask.attachments.length > 0 ? (
-                  <View style={{ marginBottom: 12 }}>
-                    {selectedTask.attachments.map((att, idx) => {
-                      const isImage = att.fileType.startsWith("image/") || /\.(jpg|jpeg|png|gif)$/i.test(att.name);
-                      return (
-                        <TouchableOpacity key={idx} onPress={() => att.url && setPreviewAttachment(att)} style={s.attachmentRow}>
-                          {isImage ? (
-                            <Image source={{ uri: att.url }} style={s.attachmentThumb} resizeMode="cover" />
-                          ) : (
-                            <View style={[s.attachmentThumb, s.attachmentThumbFile]}>
-                              <Ionicons name="document-text-outline" size={20} color={C.textMuted} />
-                            </View>
-                          )}
-                          <View style={s.flex}>
-                            <Text style={s.attachmentName} numberOfLines={1}>{att.name}</Text>
-                            <Text style={s.attachmentType}>{att.fileType.split("/")[1]?.toUpperCase() || "FILE"}</Text>
-                          </View>
-                          <Ionicons name="eye-outline" size={14} color={C.accent} />
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </View>
-                ) : (
-                  <Text style={[s.bodyMuted, { marginBottom: 12 }]}>No attachments yet</Text>
-                )}
-                {!isViewer && (
-                  <View style={[s.row, { gap: 8, marginBottom: 20 }]}>
-                    <TouchableOpacity onPress={pickImage} disabled={uploading} style={[s.flex, s.attachBtn]}>
-                      <Ionicons name="image-outline" size={15} color={C.textSecondary} />
-                      <Text style={s.attachBtnText}>Add image</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity onPress={pickDocument} disabled={uploading} style={[s.flex, s.attachBtn]}>
-                      <Ionicons name="document-outline" size={15} color={C.textSecondary} />
-                      <Text style={s.attachBtnText}>Add doc / PDF</Text>
-                    </TouchableOpacity>
-                  </View>
-                )}
-                {uploading && (
-                  <View style={[s.row, { justifyContent: "center", gap: 8, marginBottom: 16 }]}>
-                    <ActivityIndicator size="small" color={C.accent} />
-                    <Text style={s.bodyMuted}>Uploading…</Text>
-                  </View>
-                )}
+
 
                 {/* Time Tracking */}
                 <SectionLabel>Time tracking</SectionLabel>
@@ -3511,144 +3539,7 @@ export default function TasksScreen() {
                   );
                 })()}
 
-                <View style={s.divider} />
 
-                {/* ─── Comments ───────────────────────────────────────────────
-                    Redesigned for easier reach: comment composer sits directly
-                    under the label with a single-row layout, the send button
-                    is a filled circular tap target (44px) instead of a small
-                    text button, and each comment card has bigger touch targets
-                    for edit/delete plus a roomier reaction row so quick
-                    reactions don't require precise taps. */}
-                <SectionLabel>Comments ({comments.length})</SectionLabel>
-
-                {!isViewer && (
-                  <View style={s.commentComposer}>
-                    <View style={[s.flex, s.commentComposerInputWrap]}>
-                      <TextInput
-                        style={s.commentComposerInput}
-                        placeholder="Write a comment…"
-                        placeholderTextColor={C.textMuted}
-                        value={newCommentContent}
-                        onChangeText={handleNewCommentChangeText}
-                        multiline
-                      />
-                    </View>
-                    <TouchableOpacity
-                      onPress={handlePostComment}
-                      disabled={!newCommentContent.trim()}
-                      style={[s.commentSendBtn, !newCommentContent.trim() && { opacity: 0.4 }]}
-                    >
-                      <Ionicons name="arrow-up" size={18} color={C.onAccent} />
-                    </TouchableOpacity>
-                  </View>
-                )}
-                {!isViewer && <View style={{ marginBottom: 8 }}>{renderMentionSuggestions("newComment")}</View>}
-
-                {loadingComments ? (
-                  <ActivityIndicator color={C.accent} style={{ marginVertical: 16 }} />
-                ) : comments.length === 0 ? (
-                  <View style={s.emptyStateBox}>
-                    <Ionicons name="chatbubbles-outline" size={22} color={C.textMuted} style={{ marginBottom: 6 }} />
-                    <Text style={s.emptyHint}>No comments yet — be the first to say something</Text>
-                  </View>
-                ) : (
-                  <View style={{ marginBottom: 12, gap: 10 }}>
-                    {comments.map((comm) => {
-                      const isOwner = comm.user?._id === user?._id;
-                      const isEditing = editingCommentId === comm._id;
-
-                      return (
-                        <View key={comm._id} style={s.commentCard}>
-                          <View style={s.commentMeta}>
-                            <View style={s.commentAuthorRow}>
-                              <View style={s.commentAvatar}>
-                                <Text style={s.commentAvatarText}>{getInitials(comm.user)}</Text>
-                              </View>
-                              <View>
-                                <Text style={s.commentAuthor}>{getFullName(comm.user)}</Text>
-                                {comm.createdAt && (
-                                  <Text style={s.commentDate}>{new Date(comm.createdAt).toLocaleDateString()}</Text>
-                                )}
-                              </View>
-                            </View>
-                            {isOwner && !isEditing && (
-                              <View style={{ flexDirection: "row", gap: 4 }}>
-                                <TouchableOpacity
-                                  onPress={() => {
-                                    setEditingCommentId(comm._id);
-                                    setEditCommentText(comm.content);
-                                  }}
-                                  style={s.commentIconBtn}
-                                >
-                                  <Ionicons name="pencil-outline" size={14} color={C.accent} />
-                                </TouchableOpacity>
-                                <TouchableOpacity onPress={() => handleDeleteComment(comm._id)} style={s.commentIconBtn}>
-                                  <Ionicons name="trash-outline" size={14} color={C.danger} />
-                                </TouchableOpacity>
-                              </View>
-                            )}
-                          </View>
-
-                          {isEditing ? (
-                            <View style={{ gap: 8, marginTop: 8 }}>
-                              <View style={[s.inputWrap, { paddingVertical: 4 }]}>
-                                <TextInput
-                                  style={[s.input, { minHeight: 36 }]}
-                                  value={editCommentText}
-                                  onChangeText={handleEditCommentChangeText}
-                                  multiline
-                                />
-                              </View>
-                              {renderMentionSuggestions("editComment")}
-                              <View style={{ flexDirection: "row", gap: 8, justifyContent: "flex-end" }}>
-                                <TouchableOpacity
-                                  onPress={() => {
-                                    setEditingCommentId(null);
-                                    setEditCommentText("");
-                                  }}
-                                  style={s.inlineBtnGhost}
-                                >
-                                  <Text style={s.inlineBtnGhostText}>Cancel</Text>
-                                </TouchableOpacity>
-                                <TouchableOpacity onPress={() => handleUpdateComment(comm._id, editCommentText)} style={s.inlineBtn}>
-                                  <Text style={s.inlineBtnText}>Save</Text>
-                                </TouchableOpacity>
-                              </View>
-                            </View>
-                          ) : (
-                            <Text style={s.commentBody}>{renderInline(comm.content, themeColor)}</Text>
-                          )}
-
-                          {/* Reaction chips — larger hit area, even spacing */}
-                          <View style={s.reactionRow}>
-                            {(["👍", "❤️", "🎉", "🚀"] as const).map((emoji) => {
-                              const reactionsList = comm.reactions || [];
-                              const count = reactionsList.filter((r) => r.emoji === emoji).length;
-                              const hasReacted = reactionsList.some(
-                                (r) => r.emoji === emoji && (typeof r.user === "object" ? r.user._id : r.user) === user?._id
-                              );
-
-                              return (
-                                <TouchableOpacity
-                                  key={emoji}
-                                  disabled={isViewer}
-                                  onPress={() => !isViewer && handleToggleReaction(comm._id, emoji)}
-                                  style={[s.reactionChip, hasReacted && { backgroundColor: C.accentBg, borderColor: C.accentBorder }]}
-                                >
-                                  <Text style={{ fontSize: 13 }}>{emoji}</Text>
-                                  {count > 0 ? (
-                                    <Text style={[s.reactionCount, hasReacted && { color: C.accent }]}>{count}</Text>
-                                  ) : null}
-                                </TouchableOpacity>
-                              );
-                            })}
-                          </View>
-                        </View>
-                      );
-                    })}
-                  </View>
-                )}
 
                 {/* Archive */}
                 {!isViewer && (
@@ -3919,6 +3810,240 @@ export default function TasksScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* ── Modal: Focused Comments ─────────────────────────────────────────── */}
+      <Modal visible={commentsModalVisible} transparent animationType="slide" onRequestClose={() => setCommentsModalVisible(false)}>
+        <View style={s.detailOverlay}>
+          <TouchableOpacity style={StyleSheet.absoluteFill} onPress={() => setCommentsModalVisible(false)} />
+          <View style={[s.detailPanel, { maxHeight: "80%" }]}>
+            <View style={s.dragHandle} />
+            {selectedTask && (
+              <View>
+                <View style={[s.row, { justifyContent: "space-between", marginBottom: 16 }]}>
+                  <View style={s.flex}>
+                    <Text style={s.headerEyebrow}>Task Comments</Text>
+                    <Text style={s.h2} numberOfLines={1}>{selectedTask.title}</Text>
+                  </View>
+                  <TouchableOpacity onPress={() => setCommentsModalVisible(false)} style={{ padding: 4 }}>
+                    <Ionicons name="close" size={22} color={C.textPrimary} />
+                  </TouchableOpacity>
+                </View>
+
+                <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 420 }} contentContainerStyle={{ paddingBottom: 20 }}>
+                  <SectionLabel>{`Comments (${comments.length})`}</SectionLabel>
+
+                  {!isViewer && (
+                    <View style={s.commentComposer}>
+                      <View style={[s.flex, s.commentComposerInputWrap]}>
+                        <TextInput
+                          style={s.commentComposerInput}
+                          placeholder="Write a comment…"
+                          placeholderTextColor={C.textMuted}
+                          value={newCommentContent}
+                          onChangeText={handleNewCommentChangeText}
+                          multiline
+                        />
+                      </View>
+                      <TouchableOpacity
+                        onPress={handlePostComment}
+                        disabled={!newCommentContent.trim()}
+                        style={[s.commentSendBtn, !newCommentContent.trim() && { opacity: 0.4 }]}
+                      >
+                        <Ionicons name="arrow-up" size={18} color={C.onAccent} />
+                      </TouchableOpacity>
+                    </View>
+                  )}
+                  {!isViewer && <View style={{ marginBottom: 8 }}>{renderMentionSuggestions("newComment")}</View>}
+
+                  {loadingComments ? (
+                    <ActivityIndicator color={C.accent} style={{ marginVertical: 16 }} />
+                  ) : comments.length === 0 ? (
+                    <View style={s.emptyStateBox}>
+                      <Ionicons name="chatbubbles-outline" size={22} color={C.textMuted} style={{ marginBottom: 6 }} />
+                      <Text style={s.emptyHint}>No comments yet — be the first to say something</Text>
+                    </View>
+                  ) : (
+                    <View style={{ marginBottom: 12, gap: 10 }}>
+                      {comments.map((comm) => {
+                        const isOwner = comm.user?._id === user?._id;
+                        const isEditing = editingCommentId === comm._id;
+
+                        return (
+                          <View key={comm._id} style={s.commentCard}>
+                            <View style={s.commentMeta}>
+                              <View style={s.commentAuthorRow}>
+                                <View style={s.commentAvatar}>
+                                  <Text style={s.commentAvatarText}>{getInitials(comm.user)}</Text>
+                                </View>
+                                <View>
+                                  <Text style={s.commentAuthor}>{getFullName(comm.user)}</Text>
+                                  {comm.createdAt && (
+                                    <Text style={s.commentDate}>{new Date(comm.createdAt).toLocaleDateString()}</Text>
+                                  )}
+                                </View>
+                              </View>
+                              {isOwner && !isEditing && (
+                                <View style={{ flexDirection: "row", gap: 4 }}>
+                                  <TouchableOpacity
+                                    onPress={() => {
+                                      setEditingCommentId(comm._id);
+                                      setEditCommentText(comm.content);
+                                    }}
+                                    style={s.commentIconBtn}
+                                  >
+                                    <Ionicons name="pencil-outline" size={14} color={C.accent} />
+                                  </TouchableOpacity>
+                                  <TouchableOpacity onPress={() => handleDeleteComment(comm._id)} style={s.commentIconBtn}>
+                                    <Ionicons name="trash-outline" size={14} color={C.danger} />
+                                  </TouchableOpacity>
+                                </View>
+                              )}
+                            </View>
+
+                            {isEditing ? (
+                              <View style={{ gap: 8, marginTop: 8 }}>
+                                <View style={[s.inputWrap, { paddingVertical: 4 }]}>
+                                  <TextInput
+                                    style={[s.input, { minHeight: 36 }]}
+                                    value={editCommentText}
+                                    onChangeText={handleEditCommentChangeText}
+                                    multiline
+                                  />
+                                </View>
+                                {renderMentionSuggestions("editComment")}
+                                <View style={{ flexDirection: "row", gap: 8, justifyContent: "flex-end" }}>
+                                  <TouchableOpacity
+                                    onPress={() => {
+                                      setEditingCommentId(null);
+                                      setEditCommentText("");
+                                    }}
+                                    style={s.inlineBtnGhost}
+                                  >
+                                    <Text style={s.inlineBtnGhostText}>Cancel</Text>
+                                  </TouchableOpacity>
+                                  <TouchableOpacity onPress={() => handleUpdateComment(comm._id, editCommentText)} style={s.inlineBtn}>
+                                    <Text style={s.inlineBtnText}>Save</Text>
+                                  </TouchableOpacity>
+                                </View>
+                              </View>
+                            ) : (
+                              <Text style={s.commentBody}>{renderInline(comm.content, themeColor)}</Text>
+                            )}
+
+                            {/* Reaction chips — larger hit area, even spacing */}
+                            <View style={s.reactionRow}>
+                              {(["👍", "❤️", "🎉", "🚀"] as const).map((emoji) => {
+                                const reactionsList = comm.reactions || [];
+                                const count = reactionsList.filter((r) => r.emoji === emoji).length;
+                                const hasReacted = reactionsList.some(
+                                  (r) => r.emoji === emoji && (typeof r.user === "object" ? r.user._id : r.user) === user?._id
+                                );
+
+                                return (
+                                  <TouchableOpacity
+                                    key={emoji}
+                                    disabled={isViewer}
+                                    onPress={() => !isViewer && handleToggleReaction(comm._id, emoji)}
+                                    style={[s.reactionChip, hasReacted && { backgroundColor: C.accentBg, borderColor: C.accentBorder }]}
+                                  >
+                                    <Text style={{ fontSize: 13 }}>{emoji}</Text>
+                                    {count > 0 ? (
+                                      <Text style={[s.reactionCount, hasReacted && { color: C.accent }]}>{count}</Text>
+                                    ) : null}
+                                  </TouchableOpacity>
+                                );
+                              })}
+                            </View>
+                          </View>
+                        );
+                      })}
+                    </View>
+                  )}
+                </ScrollView>
+              </View>
+            )}
+
+            <TouchableOpacity style={s.secondaryBtn} onPress={() => setCommentsModalVisible(false)}>
+              <Text style={s.secondaryBtnText}>Close</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ── Modal: Focused Attachments ──────────────────────────────────────── */}
+      <Modal visible={attachmentsModalVisible} transparent animationType="slide" onRequestClose={() => setAttachmentsModalVisible(false)}>
+        <View style={s.detailOverlay}>
+          <TouchableOpacity style={StyleSheet.absoluteFill} onPress={() => setAttachmentsModalVisible(false)} />
+          <View style={[s.detailPanel, { maxHeight: "80%" }]}>
+            <View style={s.dragHandle} />
+            {selectedTask && (
+              <View>
+                <View style={[s.row, { justifyContent: "space-between", marginBottom: 16 }]}>
+                  <View style={s.flex}>
+                    <Text style={s.headerEyebrow}>Task Attachments</Text>
+                    <Text style={s.h2} numberOfLines={1}>{selectedTask.title}</Text>
+                  </View>
+                  <TouchableOpacity onPress={() => setAttachmentsModalVisible(false)} style={{ padding: 4 }}>
+                    <Ionicons name="close" size={22} color={C.textPrimary} />
+                  </TouchableOpacity>
+                </View>
+
+                <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 420 }} contentContainerStyle={{ paddingBottom: 20 }}>
+                  <SectionLabel>Attachments</SectionLabel>
+                  {selectedTask.attachments && selectedTask.attachments.length > 0 ? (
+                    <View style={{ marginBottom: 12 }}>
+                      {selectedTask.attachments.map((att, idx) => {
+                        const isImage = att.fileType.startsWith("image/") || /\.(jpg|jpeg|png|gif)$/i.test(att.name);
+                        return (
+                          <TouchableOpacity key={idx} onPress={() => att.url && setPreviewAttachment(att)} style={s.attachmentRow}>
+                            {isImage ? (
+                              <Image source={{ uri: att.url }} style={s.attachmentThumb} resizeMode="cover" />
+                            ) : (
+                              <View style={[s.attachmentThumb, s.attachmentThumbFile]}>
+                                <Ionicons name="document-text-outline" size={20} color={C.textMuted} />
+                              </View>
+                            )}
+                            <View style={s.flex}>
+                              <Text style={s.attachmentName} numberOfLines={1}>{att.name}</Text>
+                              <Text style={s.attachmentType}>{att.fileType.split("/")[1]?.toUpperCase() || "FILE"}</Text>
+                            </View>
+                            <Ionicons name="eye-outline" size={14} color={C.accent} />
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                  ) : (
+                    <Text style={[s.bodyMuted, { marginBottom: 12 }]}>No attachments yet</Text>
+                  )}
+
+                  {!isViewer && (
+                    <View style={[s.row, { gap: 8, marginBottom: 20 }]}>
+                      <TouchableOpacity onPress={pickImage} disabled={uploading} style={[s.flex, s.attachBtn]}>
+                        <Ionicons name="image-outline" size={15} color={C.textSecondary} />
+                        <Text style={s.attachBtnText}>Add image</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity onPress={pickDocument} disabled={uploading} style={[s.flex, s.attachBtn]}>
+                        <Ionicons name="document-outline" size={15} color={C.textSecondary} />
+                        <Text style={s.attachBtnText}>Add doc / PDF</Text>
+                      </TouchableOpacity>
+                    </View>
+                  )}
+                  {uploading && (
+                    <View style={[s.row, { justifyContent: "center", gap: 8, marginBottom: 16 }]}>
+                      <ActivityIndicator size="small" color={C.accent} />
+                      <Text style={s.bodyMuted}>Uploading…</Text>
+                    </View>
+                  )}
+                </ScrollView>
+              </View>
+            )}
+
+            <TouchableOpacity style={s.secondaryBtn} onPress={() => setAttachmentsModalVisible(false)}>
+              <Text style={s.secondaryBtnText}>Close</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -3976,6 +4101,8 @@ const s = StyleSheet.create({
   cardTitleStrike: { textDecorationLine: "line-through", color: C.textMuted },
   cardDesc: { fontSize: 12, color: C.textMuted, lineHeight: 17, marginBottom: 10 },
   cardFooter: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 6 },
+  cardIconBtn: { flexDirection: "row", alignItems: "center", gap: 4, paddingVertical: 4 },
+  cardIconText: { fontSize: 11, fontWeight: "600", color: C.textSecondary },
   grabHandle: { padding: 5, borderRadius: 6, backgroundColor: C.bg, alignItems: "center", justifyContent: "center" },
 
   // Badges
