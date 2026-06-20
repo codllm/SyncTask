@@ -9,7 +9,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
     });
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getProjectMembersController = exports.changeProjectRoleController = exports.removeMemberFromProjectController = exports.addMemberToProjectController = exports.deleteProjectController = exports.updateProjectController = exports.getWorkspaceProjectsController = exports.getProjectByIdController = exports.createProjectController = void 0;
+exports.updateProjectCustomFieldsController = exports.updateProjectColumnsController = exports.deleteProjectPermanentlyController = exports.restoreProjectController = exports.getTrashProjectsController = exports.getProjectMembersController = exports.changeProjectRoleController = exports.removeMemberFromProjectController = exports.addMemberToProjectController = exports.deleteProjectController = exports.updateProjectController = exports.getWorkspaceProjectsController = exports.getProjectByIdController = exports.createProjectController = void 0;
 const project_service_1 = require("../services/project.service");
 // CREATE PROJECT
 const createProjectController = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
@@ -165,3 +165,60 @@ const getProjectMembersController = (req, res) => __awaiter(void 0, void 0, void
     }
 });
 exports.getProjectMembersController = getProjectMembersController;
+const getTrashProjectsController = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const workspaceId = req.params.workspaceId;
+        const projects = yield (0, project_service_1.getTrashProjectsService)(workspaceId);
+        return res.status(200).json({ success: true, projects });
+    }
+    catch (error) {
+        return res.status(500).json({ success: false, message: error.message || "Failed to fetch trash projects" });
+    }
+});
+exports.getTrashProjectsController = getTrashProjectsController;
+const restoreProjectController = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const projectId = req.params.projectId;
+        const project = yield (0, project_service_1.restoreProjectService)(projectId);
+        return res.status(200).json({ success: true, project });
+    }
+    catch (error) {
+        return res.status(500).json({ success: false, message: error.message || "Failed to restore project" });
+    }
+});
+exports.restoreProjectController = restoreProjectController;
+const deleteProjectPermanentlyController = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const projectId = req.params.projectId;
+        yield (0, project_service_1.deleteProjectPermanentlyService)(projectId);
+        return res.status(200).json({ success: true, message: "Project permanently deleted" });
+    }
+    catch (error) {
+        return res.status(500).json({ success: false, message: error.message || "Failed to permanently delete project" });
+    }
+});
+exports.deleteProjectPermanentlyController = deleteProjectPermanentlyController;
+const updateProjectColumnsController = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const projectId = req.params.projectId;
+        const { columns } = req.body;
+        const project = yield (0, project_service_1.updateProjectColumns)(projectId, columns);
+        return res.status(200).json({ success: true, project });
+    }
+    catch (error) {
+        return res.status(500).json({ success: false, message: error.message || "Failed to update project columns" });
+    }
+});
+exports.updateProjectColumnsController = updateProjectColumnsController;
+const updateProjectCustomFieldsController = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const projectId = req.params.projectId;
+        const { customFields } = req.body;
+        const project = yield (0, project_service_1.updateProjectCustomFields)(projectId, customFields);
+        return res.status(200).json({ success: true, project });
+    }
+    catch (error) {
+        return res.status(500).json({ success: false, message: error.message || "Failed to update project custom fields" });
+    }
+});
+exports.updateProjectCustomFieldsController = updateProjectCustomFieldsController;

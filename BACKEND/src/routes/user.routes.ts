@@ -1,6 +1,6 @@
 import { Router } from "express"; // Use import instead of require
 import { body } from "express-validator";
-import { signup, login, profile, logout,updateUserProfile,forgetPass, updatePreferences, togglePinProjectController, togglePinTaskController, getPinnedItemsController, updateAvatarController, saveFilterController, getSavedFiltersController, deleteSavedFilterController } from "../controllers/user.controller";
+import { signup, login, profile, logout,updateUserProfile,forgetPass, updatePreferences, togglePinProjectController, togglePinTaskController, getPinnedItemsController, updateAvatarController, saveFilterController, getSavedFiltersController, deleteSavedFilterController, googleAuth, appleAuth } from "../controllers/user.controller";
 import { userauth } from "../middleware/auth.middleware";
 import { upload } from "../middleware/upload.middleware";
 
@@ -75,5 +75,9 @@ router.put("/profile/avatar", userauth, upload.single("avatar"), updateAvatarCon
 router.post("/saved-filters", userauth, saveFilterController);
 router.get("/saved-filters/:projectId", userauth, getSavedFiltersController);
 router.delete("/saved-filters/:filterId", userauth, deleteSavedFilterController);
+
+// Social login routes
+router.post("/oauth/google", googleAuth);
+router.post("/oauth/apple", appleAuth);
 
 export default router;

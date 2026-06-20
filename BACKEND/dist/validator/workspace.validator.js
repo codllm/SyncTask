@@ -26,4 +26,7 @@ exports.updateWorkspaceSchema = zod_1.z.object({
     description: zod_1.z
         .string()
         .optional(),
+    logoUrl: zod_1.z
+        .string()
+        .optional(),
 });

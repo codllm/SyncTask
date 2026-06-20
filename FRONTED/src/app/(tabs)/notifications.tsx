@@ -28,12 +28,12 @@ const T = {
   cardUnread:    "#1B2030",
   border:        "#2A2D38",
   borderLight:   "#333748",
-  textPrimary:   "#E2E4EA",
-  textSecondary: "#6B7280",
-  textMuted:     "#3D4049",
+  textPrimary:   "#ffffff",
+  textSecondary: "#ffffff",
+  textMuted:     "#ffffff",
   accent:        "#5865F2",
   accentBg:      "rgba(88,101,242,0.12)",
-  accentText:    "#A5AEFF",
+  accentText:    "#ffffff",
   danger:        "#F04747",
   dangerBg:      "rgba(240,71,71,0.08)",
   dangerBorder:  "rgba(240,71,71,0.18)",
@@ -167,7 +167,7 @@ export default function NotificationsScreen() {
   });
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: T.bg }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: T.bg }} edges={['top', 'left', 'right']}>
       <StatusBar barStyle="light-content" backgroundColor={T.bg} />
 
       {/* ── Header ── */}

@@ -129,7 +129,7 @@ export const updateWorkspace = async ({
 export const addUserToWorkspace = async (
   workspaceId: string,
   userId: string,
-  inviterId?: string
+  inviterId?: string //optional, to specify who is inviting (admin or owner
 ) => {
 
   const workspace = await Workspace.findById(

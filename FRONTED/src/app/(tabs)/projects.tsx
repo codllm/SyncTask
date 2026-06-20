@@ -35,8 +35,33 @@ import * as ImagePicker from "expo-image-picker";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 
-const PROJECT_COLORS = ["#5865F2", "#95E0F9", "#E8D4F5", "#FED7AA", "#FFA3B1"];
+// ─── Design tokens ────────────────────────────────────────────────────────────
+const C = {
+  bg: "#15171C",
+  surface: "#1B1E25",
+  card: "#1C1F26",
+  cardAlt: "#20242C",
+  cardBorder: "#262A33",
+  border: "#262A33",
+  borderLight: "#343944",
+  textPrimary: "#FFFFFF",
+  textSecondary: "#ffff",
+  textMuted: "#ffff",
+  accent: "#5B8DEF",
+  onAccent: "#0B0C10",
+  accentBg: "rgba(91,141,239,0.14)",
+  accentBorder: "rgba(91,141,239,0.35)",
+  danger: "#F0827E",
+  dangerBg: "rgba(226,75,74,0.12)",
+  dangerBorder: "rgba(226,75,74,0.28)",
+  done: "#5DCAA5",
+};
 
+const PROJECT_COLORS = [
+  "#5B8DEF", "#5DCAA5", "#EF9F27", "#F0827E", "#E093C0", "#9D7BEA",
+];
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 const getUserId = (userField: any): string =>
   typeof userField === "object" && userField !== null ? userField._id : userField;
 
@@ -62,11 +87,11 @@ const getInitials = (userObj: any): string => {
 };
 
 const AVATAR_PALETTE = [
-  { bg: "#1E1C3A", text: "#C5C2F5" },
-  { bg: "#0D1A2A", text: "#85B7EB" },
-  { bg: "#0D2219", text: "#5DCAA5" },
-  { bg: "#241A06", text: "#EF9F27" },
-  { bg: "#210D0D", text: "#E24B4A" },
+  { bg: "#1E2E4A", text: "#85ACF2" },
+  { bg: "#1A2E24", text: "#5DCAA5" },
+  { bg: "#2E1A28", text: "#E093C0" },
+  { bg: "#2A2010", text: "#EF9F27" },
+  { bg: "#2E1A1A", text: "#F0827E" },
 ];
 
 const avatarColor = (seed?: string) => {
@@ -76,24 +101,32 @@ const avatarColor = (seed?: string) => {
   return AVATAR_PALETTE[Math.abs(h) % AVATAR_PALETTE.length];
 };
 
-/* ─── Tiny reusable Avatar ─────────────────────────────────── */
+// ─── Sub-components ───────────────────────────────────────────────────────────
 function Avatar({ userObj, size = 36 }: { userObj: any; size?: number }) {
   const colors = avatarColor(getFullName(userObj));
   return (
-    <View style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: colors.bg, alignItems: "center", justifyContent: "center", borderWidth: 1.5, borderColor: "#2C3550" }}>
-      <Text style={{ color: colors.text, fontSize: size * 0.36, fontWeight: "700" }}>{getInitials(userObj)}</Text>
+    <View style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: colors.bg, alignItems: "center", justifyContent: "center" }}>
+      <Text style={{ color: colors.text, fontSize: size * 0.35, fontWeight: "700" }}>{getInitials(userObj)}</Text>
     </View>
   );
 }
 
-/* ─── Role badge ────────────────────────────────────────────── */
 function RolePill({ role, accent }: { role: string; accent?: string }) {
-  const color = role === "admin" ? (accent ?? "#5865F2") : "#4A4A6A";
+  const isElevated = role === "admin" || role === "owner";
+  const color = isElevated ? (accent ?? C.accent) : C.textMuted;
   return (
-    <View style={{ backgroundColor: `${color}22`, borderColor: `${color}55`, borderWidth: 1, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 5 }}>
-      <Text style={{ color, fontSize: 9, fontWeight: "800", textTransform: "uppercase", letterSpacing: 0.5 }}>{role}</Text>
+    <View style={{ backgroundColor: isElevated ? `${color}20` : C.cardAlt, borderRadius: 6, paddingHorizontal: 7, paddingVertical: 3 }}>
+      <Text style={{ color, fontSize: 9, fontWeight: "800", textTransform: "uppercase", letterSpacing: 0.4 }}>{role}</Text>
     </View>
   );
+}
+
+function Divider() {
+  return <View style={{ height: 1, backgroundColor: C.border, marginVertical: 16 }} />;
+}
+
+function SLabel({ text }: { text: string }) {
+  return <Text style={{ fontSize: 10, fontWeight: "700", letterSpacing: 0.5, textTransform: "uppercase", color: C.textMuted, marginBottom: 8 }}>{text}</Text>;
 }
 
 /* ══════════════════════════════════════════════════════════════
@@ -103,34 +136,28 @@ export default function ProjectsScreen() {
   const router = useRouter();
   const { user, activeWorkspace, projects, refreshProjects, activeProject, selectProject, themeColor, refreshWorkspaces } = useApp();
 
-  /* ── create modal ── */
   const [createVisible, setCreateVisible] = useState(false);
   const [newName, setNewName] = useState("");
   const [newDesc, setNewDesc] = useState("");
-  const [newColor, setNewColor] = useState("#5865F2");
+  const [newColor, setNewColor] = useState(C.accent);
   const [creating, setCreating] = useState(false);
 
-  /* ── manage modal ── */
   const [manageVisible, setManageVisible] = useState(false);
   const [selProject, setSelProject] = useState<any>(null);
 
-  /* ── loading per-user ── */
   const [addingId, setAddingId] = useState<string | null>(null);
   const [removingId, setRemovingId] = useState<string | null>(null);
   const [roleId, setRoleId] = useState<string | null>(null);
   const [inviteId, setInviteId] = useState<string | null>(null);
 
-  /* ── search ── */
   const [query, setQuery] = useState("");
   const [globalResults, setGlobalResults] = useState<SearchUserResult[]>([]);
   const [searching, setSearching] = useState(false);
 
-  /* ── profile modal ── */
   const [profileVisible, setProfileVisible] = useState(false);
   const [profileUser, setProfileUser] = useState<any>(null);
 
-  /* ── cover image & milestones & progress ── */
-  const [projectStats, setProjectStats] = useState<{[projId: string]: { completed: number; total: number }}>({});
+  const [projectStats, setProjectStats] = useState<{ [projId: string]: { completed: number; total: number } }>({});
   const [newCoverUrl, setNewCoverUrl] = useState("");
   const [uploadingCover, setUploadingCover] = useState(false);
   const [settingsTab, setSettingsTab] = useState<"members" | "milestones">("members");
@@ -140,7 +167,6 @@ export default function ProjectsScreen() {
   const [newMilestoneDesc, setNewMilestoneDesc] = useState("");
   const [creatingMilestone, setCreatingMilestone] = useState(false);
 
-  /* keep selProject fresh when projects refresh */
   useEffect(() => {
     if (selProject) {
       const fresh = projects.find((p: any) => p._id === selProject._id);
@@ -148,7 +174,6 @@ export default function ProjectsScreen() {
     }
   }, [projects]);
 
-  /* fetch project task stats */
   useEffect(() => {
     const fetchAllStats = async () => {
       const statsMap: any = {};
@@ -160,18 +185,13 @@ export default function ProjectsScreen() {
             const completed = res.tasks.filter((t) => t.status === "completed").length;
             statsMap[proj._id] = { completed, total };
           }
-        } catch (e) {
-          console.error("Failed to fetch project tasks stats:", e);
-        }
+        } catch (e) { console.error("Failed to fetch project tasks stats:", e); }
       }
       setProjectStats(statsMap);
     };
-    if (projects.length > 0) {
-      fetchAllStats();
-    }
+    if (projects.length > 0) fetchAllStats();
   }, [projects]);
 
-  /* fetch milestones when settings project or settingsTab changes */
   useEffect(() => {
     if (selProject && settingsTab === "milestones") {
       loadMilestones(selProject._id);
@@ -182,17 +202,11 @@ export default function ProjectsScreen() {
     setLoadingMilestones(true);
     try {
       const res = await getProjectMilestones(projId);
-      if (res.success) {
-        setMilestones(res.milestones);
-      }
-    } catch (e) {
-      console.error("Failed to load milestones:", e);
-    } finally {
-      setLoadingMilestones(false);
-    }
+      if (res.success) setMilestones(res.milestones);
+    } catch (e) { console.error("Failed to load milestones:", e); }
+    finally { setLoadingMilestones(false); }
   };
 
-  /* debounced global search */
   useEffect(() => {
     if (query.trim().length < 2) { setGlobalResults([]); return; }
     const t = setTimeout(doGlobalSearch, 400);
@@ -225,7 +239,6 @@ export default function ProjectsScreen() {
     setGlobalResults([]);
   }
 
-  /* ── workspace members not yet in project (filtered by search) ── */
   const availableWsMembers = (activeWorkspace?.members ?? []).filter((wm: any) => {
     const id = getUserId(wm.user);
     const alreadyIn = (selProject?.members ?? []).some((pm: any) => getUserId(pm.user) === id);
@@ -245,8 +258,7 @@ export default function ProjectsScreen() {
   const isProjectViewer = projMember?.role === "viewer";
   const isViewer = isWorkspaceViewer || isProjectViewer;
 
-
-  /* ══ HANDLERS ══════════════════════════════════════════════ */
+  /* ══ HANDLERS (all identical to original) ══════════════════ */
 
   async function handleCreate() {
     if (!activeWorkspace || !newName.trim()) { Alert.alert("Required", "Project name is required."); return; }
@@ -260,7 +272,7 @@ export default function ProjectsScreen() {
         coverImageUrl: newCoverUrl || undefined,
       });
       if (res.success) {
-        setNewName(""); setNewDesc(""); setNewColor("#5865F2"); setNewCoverUrl("");
+        setNewName(""); setNewDesc(""); setNewColor(C.accent); setNewCoverUrl("");
         setCreateVisible(false);
         await refreshProjects();
       }
@@ -273,30 +285,18 @@ export default function ProjectsScreen() {
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!perm.granted) { Alert.alert("Permission denied", "Media library access required."); return; }
     try {
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ["images"],
-        allowsEditing: true,
-        aspect: [3, 1],
-        quality: 0.8,
-      });
+      const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], allowsEditing: true, aspect: [3, 1], quality: 0.8 });
       if (!result.canceled && result.assets?.[0]) {
         setUploadingCover(true);
         const asset = result.assets[0];
         const formData = new FormData();
-        formData.append("file", {
-          uri: Platform.OS === "ios" ? asset.uri.replace("file://", "") : asset.uri,
-          name: asset.fileName || `cover_${Date.now()}.jpg`,
-          type: "image/jpeg",
-        } as any);
-
+        formData.append("file", { uri: Platform.OS === "ios" ? asset.uri.replace("file://", "") : asset.uri, name: asset.fileName || `cover_${Date.now()}.jpg`, type: "image/jpeg" } as any);
         const uploadRes = await uploadFile(formData);
         if (uploadRes.success) {
           if (isNewProject) {
             setNewCoverUrl(uploadRes.url);
           } else if (selProject) {
-            const updateRes = await updateProject(selProject._id, {
-              coverImageUrl: uploadRes.url,
-            });
+            const updateRes = await updateProject(selProject._id, { coverImageUrl: uploadRes.url });
             if (updateRes.success) {
               setSelProject(updateRes.project);
               await refreshProjects();
@@ -312,56 +312,33 @@ export default function ProjectsScreen() {
     } catch (err: any) {
       console.error("Cover upload error:", err);
       Alert.alert("Error", err?.message || "Failed to upload cover.");
-    } finally {
-      setUploadingCover(false);
-    }
+    } finally { setUploadingCover(false); }
   };
 
   const handleCreateMilestone = async () => {
     if (!newMilestoneTitle.trim() || !selProject) return;
     setCreatingMilestone(true);
     try {
-      const res = await createMilestone({
-        title: newMilestoneTitle.trim(),
-        description: newMilestoneDesc.trim(),
-        project: selProject._id,
-      });
-      if (res.success) {
-        setNewMilestoneTitle("");
-        setNewMilestoneDesc("");
-        await loadMilestones(selProject._id);
-      }
-    } catch (e) {
-      console.error("Failed to create milestone:", e);
-    } finally {
-      setCreatingMilestone(false);
-    }
+      const res = await createMilestone({ title: newMilestoneTitle.trim(), description: newMilestoneDesc.trim(), project: selProject._id });
+      if (res.success) { setNewMilestoneTitle(""); setNewMilestoneDesc(""); await loadMilestones(selProject._id); }
+    } catch (e) { console.error("Failed to create milestone:", e); }
+    finally { setCreatingMilestone(false); }
   };
 
   const handleToggleMilestone = async (m: Milestone) => {
     if (!selProject) return;
     try {
-      const res = await updateMilestone(m._id, {
-        status: m.status === "active" ? "completed" : "active",
-      });
-      if (res.success) {
-        await loadMilestones(selProject._id);
-      }
-    } catch (e) {
-      console.error(e);
-    }
+      const res = await updateMilestone(m._id, { status: m.status === "active" ? "completed" : "active" });
+      if (res.success) await loadMilestones(selProject._id);
+    } catch (e) { console.error(e); }
   };
 
   const handleDeleteMilestone = async (mId: string) => {
     if (!selProject) return;
     try {
       const res = await deleteMilestone(mId);
-      if (res.success) {
-        await loadMilestones(selProject._id);
-      }
-    } catch (e) {
-      console.error(e);
-    }
+      if (res.success) await loadMilestones(selProject._id);
+    } catch (e) { console.error(e); }
   };
 
   async function handleDelete(projectId: string) {
@@ -381,15 +358,10 @@ export default function ProjectsScreen() {
     setAddingId(memberId);
     try {
       const res = await addMemberToProject(selProject._id, memberId);
-      if (res.success) {
-        setSelProject(res.project);
-        await refreshProjects();
-      } else {
-        Alert.alert("Error", "Could not add member.");
-      }
-    } catch (err: any) {
-      Alert.alert("Error", err?.response?.data?.message ?? "Failed to add member.");
-    } finally { setAddingId(null); }
+      if (res.success) { setSelProject(res.project); await refreshProjects(); }
+      else Alert.alert("Error", "Could not add member.");
+    } catch (err: any) { Alert.alert("Error", err?.response?.data?.message ?? "Failed to add member."); }
+    finally { setAddingId(null); }
   }
 
   async function handleRemove(memberId: string) {
@@ -402,9 +374,8 @@ export default function ProjectsScreen() {
           const res = await removeMemberFromProject(selProject._id, memberId);
           if (res.success) { setSelProject(res.project); await refreshProjects(); }
           else Alert.alert("Error", "Could not remove member.");
-        } catch (err: any) {
-          Alert.alert("Error", err?.response?.data?.message ?? "Failed.");
-        } finally { setRemovingId(null); }
+        } catch (err: any) { Alert.alert("Error", err?.response?.data?.message ?? "Failed."); }
+        finally { setRemovingId(null); }
       }},
     ]);
   }
@@ -420,9 +391,8 @@ export default function ProjectsScreen() {
           const res = await changeProjectRole(selProject._id, memberId, newRole);
           if (res.success) { setSelProject(res.project); await refreshProjects(); }
           else Alert.alert("Error", "Could not change role.");
-        } catch (err: any) {
-          Alert.alert("Error", err?.response?.data?.message ?? "Failed.");
-        } finally { setRoleId(null); }
+        } catch (err: any) { Alert.alert("Error", err?.response?.data?.message ?? "Failed."); }
+        finally { setRoleId(null); }
       }},
     ]);
   }
@@ -446,178 +416,153 @@ export default function ProjectsScreen() {
             Alert.alert("Partial", "Added to workspace but failed to add to project.");
             await refreshWorkspaces();
           }
-        } catch (err: any) {
-          Alert.alert("Error", err?.response?.data?.message ?? "Something went wrong.");
-        } finally { setInviteId(null); }
+        } catch (err: any) { Alert.alert("Error", err?.response?.data?.message ?? "Something went wrong."); }
+        finally { setInviteId(null); }
       }},
     ]);
   }
 
-  /* ══ NO WORKSPACE STATE ══════════════════════════════════════ */
+  /* ══ NO WORKSPACE STATE ═══════════════════════════════════════ */
   if (!activeWorkspace) {
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: "#0B0F19", alignItems: "center", justifyContent: "center", paddingHorizontal: 24 }}>
-        <Text style={{ fontSize: 40, marginBottom: 12 }}>📁</Text>
-        <Text style={{ color: "#fff", fontSize: 20, fontWeight: "700", textAlign: "center" }}>No Workspace Selected</Text>
-        <Text style={{ color: "#9B9BAE", fontSize: 14, textAlign: "center", marginTop: 8 }}>
+      <SafeAreaView style={{ flex: 1, backgroundColor: C.bg, alignItems: "center", justifyContent: "center", paddingHorizontal: 24 }}>
+        <Ionicons name="folder-outline" size={52} color={C.textMuted} style={{ marginBottom: 16 }} />
+        <Text style={{ color: C.textPrimary, fontSize: 20, fontWeight: "700", textAlign: "center" }}>No Workspace Selected</Text>
+        <Text style={{ color: C.textSecondary, fontSize: 14, textAlign: "center", marginTop: 8, lineHeight: 22 }}>
           Select or create a workspace on the dashboard to view projects.
         </Text>
       </SafeAreaView>
     );
   }
 
-  /* ══ MAIN RENDER ═════════════════════════════════════════════ */
+  /* ══ MAIN RENDER ══════════════════════════════════════════════ */
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: "#0F1117" }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: C.bg }} edges={['top', 'left', 'right']}>
 
-      {/* ── TOP HEADER ── */}
-      <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 20, paddingVertical: 14, backgroundColor: "#0F1117", borderBottomWidth: 1, borderBottomColor: "#1E2130" }}>
+      {/* ── HEADER ── */}
+      <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 18, paddingTop: 12, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: C.card }}>
         <View>
-          <Text style={{ color: "#6B7280", fontSize: 11, fontWeight: "700", textTransform: "uppercase", letterSpacing: 1 }}>Workspace</Text>
-          <Text style={{ color: "#fff", fontSize: 17, fontWeight: "800", marginTop: 1 }}>{activeWorkspace.name}</Text>
+          <Text style={{ color: C.textMuted, fontSize: 10, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 2 }}>Workspace</Text>
+          <Text style={{ color: C.textPrimary, fontSize: 18, fontWeight: "700" }}>{activeWorkspace.name}</Text>
         </View>
         {!isWorkspaceViewer && (
           <TouchableOpacity
             onPress={() => setCreateVisible(true)}
-            style={{ backgroundColor: themeColor, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 12, flexDirection: "row", alignItems: "center", gap: 4 }}
+            style={{ backgroundColor: themeColor, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 12, flexDirection: "row", alignItems: "center", gap: 5 }}
           >
-            <Text style={{ color: "#0C101B", fontWeight: "800", fontSize: 14 }}>+ New Project</Text>
+            <Ionicons name="add" size={16} color={C.onAccent} />
+            <Text style={{ color: C.onAccent, fontWeight: "700", fontSize: 13 }}>New Project</Text>
           </TouchableOpacity>
         )}
       </View>
 
       {/* ── PROJECT LIST ── */}
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16, paddingBottom: 48 }}>
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: 14, paddingTop: 14, paddingBottom: 48 }}>
         {projects.length === 0 ? (
-          <View style={{ backgroundColor: "#161922", borderRadius: 20, padding: 40, alignItems: "center", marginTop: 16, borderWidth: 1, borderColor: "#1E2130" }}>
-            <Text style={{ fontSize: 40, marginBottom: 12 }}>📁</Text>
-            <Text style={{ color: "#9B9BAE", fontSize: 15, textAlign: "center", lineHeight: 22 }}>
+          <View style={{ backgroundColor: C.card, borderRadius: 20, padding: 40, alignItems: "center", marginTop: 8, borderWidth: 1, borderColor: C.cardBorder }}>
+            <Ionicons name="folder-open-outline" size={38} color={C.textMuted} style={{ marginBottom: 14 }} />
+            <Text style={{ color: C.textSecondary, fontSize: 14, textAlign: "center", lineHeight: 22 }}>
               No projects yet.{"\n"}
-              <Text style={{ color: themeColor, fontWeight: "700" }}>Tap + New Project</Text> to create one.
+              <Text style={{ color: themeColor, fontWeight: "700" }}>Tap New Project</Text> to get started.
             </Text>
           </View>
         ) : projects.map((project: any) => {
           const isActive = activeProject?._id === project._id;
           const color = project.color || themeColor;
           const isOwner = getProjectCreatorId(project) === user?._id;
-
           const stats = projectStats[project._id] || { completed: 0, total: 0 };
           const progress = stats.total > 0 ? Math.round((stats.completed / stats.total) * 100) : 0;
 
           return (
-            <View
-              key={project._id}
-              style={{ backgroundColor: "#161922", borderRadius: 18, marginBottom: 14, borderWidth: 1.5, borderColor: isActive ? color : "#1E2130", overflow: "hidden", position: "relative" }}
-            >
-              <View style={{ height: 50, position: "relative" }}>
+            <View key={project._id} style={{ backgroundColor: C.card, borderRadius: 20, marginBottom: 14, borderWidth: 1.5, borderColor: isActive ? color : C.cardBorder, overflow: "hidden" }}>
+              {/* Tinted banner */}
+              <View style={{ height: 58, position: "relative" }}>
                 {project.coverImageUrl ? (
-                  <Image source={{ uri: project.coverImageUrl }} style={{ width: "100%", height: 50 }} resizeMode="cover" />
+                  <Image source={{ uri: project.coverImageUrl }} style={{ width: "100%", height: 58 }} resizeMode="cover" />
                 ) : (
-                  <View style={{ width: "100%", height: 50, backgroundColor: color }} />
+                  <View style={{ width: "100%", height: 58, backgroundColor: `${color}22` }} />
                 )}
+                {isActive ? (
+                  <View style={{ position: "absolute", top: 9, right: 11, backgroundColor: `${color}25`, borderWidth: 1, borderColor: `${color}50`, paddingHorizontal: 9, paddingVertical: 3, borderRadius: 7 }}>
+                    <Text style={{ color, fontSize: 9, fontWeight: "800", textTransform: "uppercase" }}>Active</Text>
+                  </View>
+                ) : isOwner ? (
+                  <View style={{ position: "absolute", top: 9, right: 11, backgroundColor: C.cardAlt, borderWidth: 1, borderColor: C.border, paddingHorizontal: 9, paddingVertical: 3, borderRadius: 7 }}>
+                    <Text style={{ color: C.textMuted, fontSize: 9, fontWeight: "700", textTransform: "uppercase" }}>Owner</Text>
+                  </View>
+                ) : null}
               </View>
 
-              {/* Overlapping Notion/Linear-style circular icon badge */}
-              <View
-                style={{
-                  position: "absolute",
-                  top: 32,
-                  left: 16,
-                  width: 32,
-                  height: 32,
-                  borderRadius: 16,
-                  backgroundColor: "#161922",
-                  borderWidth: 1.5,
-                  borderColor: isActive ? color : "#1E2130",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  zIndex: 10,
-                  shadowColor: "#000",
-                  shadowOffset: { width: 0, height: 2 },
-                  shadowOpacity: 0.3,
-                  shadowRadius: 3,
-                  elevation: 5,
-                }}
-              >
-                <Ionicons name="briefcase" size={14} color={color} />
-              </View>
-
-              <View style={{ padding: 16, paddingTop: 20 }}>
-                {/* Project name + active badge */}
-                <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
-                  <Text style={{ color: "#fff", fontSize: 17, fontWeight: "800", flex: 1, marginRight: 8 }}>{project.name}</Text>
-                  {isActive && (
-                    <View style={{ backgroundColor: `${color}25`, borderColor: `${color}60`, borderWidth: 1, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 }}>
-                      <Text style={{ color, fontSize: 10, fontWeight: "800", textTransform: "uppercase" }}>Active</Text>
-                    </View>
-                  )}
-                  {isOwner && !isActive && (
-                    <View style={{ backgroundColor: "#1E2130", paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 }}>
-                      <Text style={{ color: "#6B7280", fontSize: 10, fontWeight: "700", textTransform: "uppercase" }}>Owner</Text>
-                    </View>
-                  )}
+              <View style={{ padding: 14 }}>
+                {/* Name row with icon */}
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 8 }}>
+                  <View style={{ width: 30, height: 30, borderRadius: 9, backgroundColor: `${color}18`, borderWidth: 1, borderColor: `${color}35`, alignItems: "center", justifyContent: "center" }}>
+                    <Ionicons name="briefcase-outline" size={14} color={color} />
+                  </View>
+                  <Text style={{ color: C.textPrimary, fontSize: 16, fontWeight: "700", flex: 1 }}>{project.name}</Text>
                 </View>
 
                 {!!project.description && (
-                  <Text style={{ color: "#6B7280", fontSize: 13, lineHeight: 18, marginBottom: 10 }}>{project.description}</Text>
+                  <Text style={{ color: C.textSecondary, fontSize: 12, lineHeight: 18, marginBottom: 12 }}>{project.description}</Text>
                 )}
 
-                {/* Progress bar */}
+                {/* Progress */}
                 <View style={{ marginBottom: 14 }}>
-                  <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
-                    <Text style={{ color: "#6B7280", fontSize: 11, fontWeight: "600" }}>PROGRESS ({stats.completed}/{stats.total})</Text>
-                    <Text style={{ color, fontSize: 11, fontWeight: "700" }}>{progress}%</Text>
+                  <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 5 }}>
+                    <Text style={{ color: C.textMuted, fontSize: 10, fontWeight: "700" }}>{stats.completed} / {stats.total} tasks</Text>
+                    <Text style={{ color, fontSize: 10, fontWeight: "700" }}>{progress}%</Text>
                   </View>
-                  <View style={{ height: 6, width: "100%", backgroundColor: "#10121A", borderRadius: 3, overflow: "hidden" }}>
-                    <View style={{ height: "100%", width: `${progress}%`, backgroundColor: color, borderRadius: 3 }} />
+                  <View style={{ height: 4, backgroundColor: C.bg, borderRadius: 2, overflow: "hidden" }}>
+                    <View style={{ height: "100%", width: `${progress}%`, backgroundColor: color, borderRadius: 2 }} />
                   </View>
                 </View>
 
-                {/* Member avatars row */}
+                {/* Avatar stack */}
                 <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 14 }}>
                   <View style={{ flexDirection: "row", marginRight: 8 }}>
                     {project.members.slice(0, 5).map((m: any, i: number) => (
-                      <View key={i} style={{ marginLeft: i === 0 ? 0 : -8, borderWidth: 2, borderColor: "#161922", borderRadius: 20 }}>
-                        {typeof m.user === "object"
-                          ? <Avatar userObj={m.user} size={30} />
-                          : <View style={{ width: 30, height: 30, borderRadius: 15, backgroundColor: "#1E2130", alignItems: "center", justifyContent: "center" }}><Text style={{ color: "#6B7280", fontSize: 11 }}>?</Text></View>
-                        }
+                      <View key={i} style={{ marginLeft: i === 0 ? 0 : -9, borderWidth: 2, borderColor: C.card, borderRadius: 20 }}>
+                        {typeof m.user === "object" ? (
+                          <Avatar userObj={m.user} size={26} />
+                        ) : (
+                          <View style={{ width: 26, height: 26, borderRadius: 13, backgroundColor: C.cardAlt, alignItems: "center", justifyContent: "center" }}>
+                            <Ionicons name="person" size={11} color={C.textMuted} />
+                          </View>
+                        )}
                       </View>
                     ))}
                   </View>
-                  <Text style={{ color: "#6B7280", fontSize: 12 }}>
+                  <Text style={{ color: C.textMuted, fontSize: 11 }}>
                     {project.members.length} member{project.members.length !== 1 ? "s" : ""}
                   </Text>
                 </View>
 
-                {/* ── ACTION BUTTONS — always visible for everyone ── */}
+                {/* Action buttons */}
                 <View style={{ flexDirection: "row", gap: 8 }}>
-                  {/* ADD MEMBER button — visible to ALL */}
                   <TouchableOpacity
                     onPress={() => openManage(project)}
-                    style={{ flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, backgroundColor: "#1E2130", borderWidth: 1, borderColor: "#2A2D3E", paddingVertical: 10, borderRadius: 12 }}
+                    style={{ flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, backgroundColor: C.cardAlt, borderWidth: 1, borderColor: C.cardBorder, paddingVertical: 11, borderRadius: 12 }}
                   >
-                    <Text style={{ fontSize: 14 }}>👥</Text>
-                    <Text style={{ color: "#C9D1E0", fontSize: 13, fontWeight: "700" }}>Add Member</Text>
+                    <Ionicons name="people-outline" size={14} color={C.textSecondary} />
+                    <Text style={{ color: C.textPrimary, fontSize: 13, fontWeight: "600" }}>Members</Text>
                   </TouchableOpacity>
 
-                  {/* OPEN BOARD button */}
                   <TouchableOpacity
                     onPress={() => { selectProject(project); router.push("/(tabs)/tasks"); }}
-                    style={{ flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, backgroundColor: color, paddingVertical: 10, borderRadius: 12 }}
+                    style={{ flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 5, backgroundColor: color, paddingVertical: 11, borderRadius: 12 }}
                   >
-                    <Text style={{ color: "#0C101B", fontSize: 13, fontWeight: "800" }}>Open Board →</Text>
+                    <Text style={{ color: C.onAccent, fontSize: 13, fontWeight: "700" }}>Open Board</Text>
+                    <Ionicons name="arrow-forward" size={13} color={C.onAccent} />
                   </TouchableOpacity>
                 </View>
 
-                {/* Settings row (owner only) */}
                 {isOwner && (
                   <TouchableOpacity
                     onPress={() => openManage(project)}
-                    style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, marginTop: 8, paddingVertical: 8, borderRadius: 10, backgroundColor: "#0F1117", borderWidth: 1, borderColor: "#1E2130" }}
+                    style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, marginTop: 8, paddingVertical: 9, borderRadius: 11, backgroundColor: C.bg, borderWidth: 1, borderColor: C.border }}
                   >
-                    <Text style={{ fontSize: 13 }}>⚙️</Text>
-                    <Text style={{ color: "#6B7280", fontSize: 12, fontWeight: "600" }}>Project Settings & Delete</Text>
+                    <Ionicons name="settings-outline" size={13} color={C.textMuted} />
+                    <Text style={{ color: C.textMuted, fontSize: 12, fontWeight: "600" }}>Project Settings & Delete</Text>
                   </TouchableOpacity>
                 )}
               </View>
@@ -631,133 +576,116 @@ export default function ProjectsScreen() {
       ══════════════════════════════════════════════════════════ */}
       <Modal visible={createVisible} transparent animationType="slide" onRequestClose={() => setCreateVisible(false)}>
         <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{ flex: 1 }}>
-          <TouchableOpacity activeOpacity={1} onPress={() => setCreateVisible(false)} style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.7)", justifyContent: "flex-end" }}>
-            <TouchableOpacity activeOpacity={1} style={{ backgroundColor: "#161922", borderTopLeftRadius: 28, borderTopRightRadius: 28, borderTopWidth: 1, borderTopColor: "#1E2130", padding: 24, paddingBottom: 40 }}>
-              {/* handle */}
-              <View style={{ width: 40, height: 4, backgroundColor: "#2A2D3E", borderRadius: 2, alignSelf: "center", marginBottom: 20 }} />
-              <Text style={{ color: "#fff", fontSize: 20, fontWeight: "800", marginBottom: 20 }}>Create New Project</Text>
+          <TouchableOpacity activeOpacity={1} onPress={() => setCreateVisible(false)} style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.65)", justifyContent: "flex-end" }}>
+            <TouchableOpacity activeOpacity={1} style={{ backgroundColor: C.surface, borderTopLeftRadius: 26, borderTopRightRadius: 26, borderTopWidth: 1, borderTopColor: C.cardBorder, padding: 22, paddingBottom: 42 }}>
+              <View style={{ width: 36, height: 4, backgroundColor: C.border, borderRadius: 2, alignSelf: "center", marginBottom: 20 }} />
+              <Text style={{ color: C.textPrimary, fontSize: 18, fontWeight: "700", marginBottom: 20 }}>Create new project</Text>
 
-              <Text style={{ color: "#6B7280", fontSize: 12, fontWeight: "600", marginBottom: 6 }}>PROJECT NAME *</Text>
-              <View style={{ backgroundColor: "#0F1117", borderRadius: 14, borderWidth: 1, borderColor: "#2A2D3E", paddingHorizontal: 14, marginBottom: 14 }}>
-                <TextInput style={{ color: "#fff", fontSize: 15, paddingVertical: 13 }} placeholder="e.g. Mobile App, Website Redesign" placeholderTextColor="#3A3D4E" value={newName} onChangeText={setNewName} />
+              <SLabel text="Project name *" />
+              <View style={{ backgroundColor: C.card, borderRadius: 13, borderWidth: 1, borderColor: C.cardBorder, paddingHorizontal: 14, marginBottom: 14 }}>
+                <TextInput style={{ color: C.textPrimary, fontSize: 15, paddingVertical: 13 }} placeholder="e.g. Mobile App, Website Redesign" placeholderTextColor={C.textMuted} value={newName} onChangeText={setNewName} />
               </View>
 
-              <Text style={{ color: "#6B7280", fontSize: 12, fontWeight: "600", marginBottom: 6 }}>DESCRIPTION</Text>
-              <View style={{ backgroundColor: "#0F1117", borderRadius: 14, borderWidth: 1, borderColor: "#2A2D3E", paddingHorizontal: 14, paddingVertical: 8, marginBottom: 20, minHeight: 80 }}>
-                <TextInput style={{ color: "#fff", fontSize: 15, textAlignVertical: "top" }} placeholder="What is this project about?" placeholderTextColor="#3A3D4E" value={newDesc} onChangeText={setNewDesc} multiline numberOfLines={3} />
+              <SLabel text="Description" />
+              <View style={{ backgroundColor: C.card, borderRadius: 13, borderWidth: 1, borderColor: C.cardBorder, paddingHorizontal: 14, paddingVertical: 8, marginBottom: 20, minHeight: 80 }}>
+                <TextInput style={{ color: C.textPrimary, fontSize: 15, textAlignVertical: "top" }} placeholder="What is this project about?" placeholderTextColor={C.textMuted} value={newDesc} onChangeText={setNewDesc} multiline numberOfLines={3} />
               </View>
 
-              <Text style={{ color: "#6B7280", fontSize: 12, fontWeight: "600", marginBottom: 12 }}>ACCENT COLOR</Text>
+              <SLabel text="Accent color" />
               <View style={{ flexDirection: "row", justifyContent: "space-around", marginBottom: 20 }}>
                 {PROJECT_COLORS.map((c) => (
-                  <TouchableOpacity key={c} onPress={() => setNewColor(c)} style={{ width: 46, height: 46, borderRadius: 23, backgroundColor: c, alignItems: "center", justifyContent: "center", borderWidth: newColor === c ? 3 : 0, borderColor: "#fff", transform: [{ scale: newColor === c ? 1.15 : 1 }] }}>
-                    {newColor === c && <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: "rgba(0,0,0,0.35)" }} />}
+                  <TouchableOpacity
+                    key={c}
+                    onPress={() => setNewColor(c)}
+                    style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: c, alignItems: "center", justifyContent: "center", borderWidth: newColor === c ? 2.5 : 0, borderColor: "#FFFFFF", transform: [{ scale: newColor === c ? 1.15 : 1 }] }}
+                  >
+                    {newColor === c && <Ionicons name="checkmark" size={15} color="#FFFFFF" />}
                   </TouchableOpacity>
                 ))}
               </View>
 
-              <Text style={{ color: "#6B7280", fontSize: 12, fontWeight: "600", marginBottom: 8 }}>PROJECT BANNER (COVER IMAGE)</Text>
+              <SLabel text="Project banner" />
               <TouchableOpacity
                 onPress={() => pickCoverImage(true)}
-                style={{
-                  backgroundColor: "#0F1117",
-                  borderRadius: 14,
-                  borderWidth: 1,
-                  borderColor: "#2A2D3E",
-                  padding: newCoverUrl ? 0 : 16,
-                  alignItems: "center",
-                  justifyContent: "center",
-                  marginBottom: 28,
-                  height: 90,
-                  overflow: "hidden",
-                }}
+                style={{ backgroundColor: C.card, borderRadius: 13, borderWidth: 1, borderColor: C.cardBorder, padding: newCoverUrl ? 0 : 16, alignItems: "center", justifyContent: "center", marginBottom: 24, height: 88, overflow: "hidden" }}
               >
                 {newCoverUrl ? (
                   <Image source={{ uri: newCoverUrl }} style={{ width: "100%", height: "100%" }} resizeMode="cover" />
                 ) : (
-                  <Text style={{ color: "#9B9BAE", fontSize: 13, fontWeight: "600" }}>
-                    {uploadingCover ? "Uploading banner..." : "Select Banner Image"}
-                  </Text>
+                  <View style={{ alignItems: "center", gap: 6 }}>
+                    <Ionicons name="image-outline" size={22} color={C.textMuted} />
+                    <Text style={{ color: C.textMuted, fontSize: 13 }}>{uploadingCover ? "Uploading..." : "Select banner image"}</Text>
+                  </View>
                 )}
               </TouchableOpacity>
 
               <View style={{ flexDirection: "row", gap: 10 }}>
-                <TouchableOpacity onPress={() => setCreateVisible(false)} style={{ flex: 1, backgroundColor: "#0F1117", borderRadius: 14, paddingVertical: 14, alignItems: "center", borderWidth: 1, borderColor: "#2A2D3E" }}>
-                  <Text style={{ color: "#9B9BAE", fontWeight: "700" }}>Cancel</Text>
+                <TouchableOpacity onPress={() => setCreateVisible(false)} style={{ flex: 1, backgroundColor: C.card, borderRadius: 13, paddingVertical: 14, alignItems: "center", borderWidth: 1, borderColor: C.cardBorder }}>
+                  <Text style={{ color: C.textSecondary, fontWeight: "700" }}>Cancel</Text>
                 </TouchableOpacity>
-                <TouchableOpacity onPress={handleCreate} disabled={creating} style={{ flex: 1, backgroundColor: themeColor, borderRadius: 14, paddingVertical: 14, alignItems: "center" }}>
-                  {creating ? <ActivityIndicator color="#0C101B" /> : <Text style={{ color: "#0C101B", fontWeight: "800", fontSize: 15 }}>Create Project</Text>}
+                <TouchableOpacity onPress={handleCreate} disabled={creating} style={{ flex: 1, backgroundColor: themeColor, borderRadius: 13, paddingVertical: 14, alignItems: "center" }}>
+                  {creating ? <ActivityIndicator color={C.onAccent} /> : <Text style={{ color: C.onAccent, fontWeight: "700", fontSize: 15 }}>Create Project</Text>}
                 </TouchableOpacity>
               </View>
             </TouchableOpacity>
           </TouchableOpacity>
         </KeyboardAvoidingView>
       </Modal>
+
       {/* ══════════════════════════════════════════════════════════
-          MODAL 2 ── MANAGE PROJECT (Members + Settings)
+          MODAL 2 ── MANAGE PROJECT
       ══════════════════════════════════════════════════════════ */}
       <Modal visible={manageVisible} transparent animationType="slide" onRequestClose={closeManage}>
         <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{ flex: 1 }}>
-          <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.7)", justifyContent: "flex-end" }}>
-            <View style={{ backgroundColor: "#161922", borderTopLeftRadius: 28, borderTopRightRadius: 28, borderTopWidth: 1, borderTopColor: "#1E2130", maxHeight: "92%", paddingBottom: 36 }}>
-              {/* handle */}
+          <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.65)", justifyContent: "flex-end" }}>
+            <View style={{ backgroundColor: C.surface, borderTopLeftRadius: 26, borderTopRightRadius: 26, borderTopWidth: 1, borderTopColor: C.cardBorder, maxHeight: "92%", paddingBottom: 36 }}>
               <View style={{ alignItems: "center", paddingTop: 14, paddingBottom: 6 }}>
-                <View style={{ width: 40, height: 4, backgroundColor: "#2A2D3E", borderRadius: 2 }} />
+                <View style={{ width: 36, height: 4, backgroundColor: C.border, borderRadius: 2 }} />
               </View>
 
-              {/* Modal header */}
-              <View style={{ paddingHorizontal: 22, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: "#1E2130" }}>
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-                  <View style={{ width: 12, height: 12, borderRadius: 6, backgroundColor: selProject?.color ?? themeColor }} />
-                  <Text style={{ color: "#fff", fontSize: 18, fontWeight: "800", flex: 1 }} numberOfLines={1}>{selProject?.name ?? "Project"}</Text>
+              {/* Header */}
+              <View style={{ paddingHorizontal: 20, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: C.border }}>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 9 }}>
+                  <View style={{ width: 9, height: 9, borderRadius: 5, backgroundColor: selProject?.color ?? themeColor }} />
+                  <Text style={{ color: C.textPrimary, fontSize: 17, fontWeight: "700", flex: 1 }} numberOfLines={1}>{selProject?.name ?? "Project"}</Text>
                 </View>
-                <Text style={{ color: "#6B7280", fontSize: 13, marginTop: 3 }}>Members & Settings</Text>
+                <Text style={{ color: C.textMuted, fontSize: 12, marginTop: 3 }}>Members & settings</Text>
               </View>
 
-              {/* Settings Tab Toggles */}
-              <View style={{ flexDirection: "row", paddingHorizontal: 22, paddingTop: 14, gap: 10 }}>
-                <TouchableOpacity
-                  onPress={() => setSettingsTab("members")}
-                  style={{
-                    paddingVertical: 8,
-                    paddingHorizontal: 16,
-                    borderRadius: 20,
-                    backgroundColor: settingsTab === "members" ? (selProject?.color ?? themeColor) : "#1E2130"
-                  }}
-                >
-                  <Text style={{ color: settingsTab === "members" ? "#0F1117" : "#C9D1E0", fontSize: 12, fontWeight: "700" }}>Members</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  onPress={() => setSettingsTab("milestones")}
-                  style={{
-                    paddingVertical: 8,
-                    paddingHorizontal: 16,
-                    borderRadius: 20,
-                    backgroundColor: settingsTab === "milestones" ? (selProject?.color ?? themeColor) : "#1E2130"
-                  }}
-                >
-                  <Text style={{ color: settingsTab === "milestones" ? "#0F1117" : "#C9D1E0", fontSize: 12, fontWeight: "700" }}>Milestones</Text>
-                </TouchableOpacity>
+              {/* Segmented tab */}
+              <View style={{ paddingHorizontal: 20, paddingTop: 14 }}>
+                <View style={{ flexDirection: "row", backgroundColor: C.card, borderRadius: 12, padding: 3 }}>
+                  {(["members", "milestones"] as const).map((tab) => {
+                    const active = settingsTab === tab;
+                    return (
+                      <TouchableOpacity
+                        key={tab}
+                        onPress={() => setSettingsTab(tab)}
+                        style={{ flex: 1, paddingVertical: 9, borderRadius: 9, alignItems: "center", backgroundColor: active ? (selProject?.color ?? themeColor) : "transparent" }}
+                      >
+                        <Text style={{ color: active ? C.onAccent : C.textSecondary, fontSize: 12, fontWeight: "700", textTransform: "capitalize" }}>{tab}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
               </View>
 
-              <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: 22, paddingBottom: 12 }}>
+              <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: 20, paddingBottom: 12 }}>
 
                 {settingsTab === "members" && (
                   <>
-                    {/* ── CURRENT MEMBERS ── */}
+                    {/* Current Members */}
                     <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-                      <Text style={{ color: "#fff", fontSize: 15, fontWeight: "800" }}>
-                        Current Members
-                      </Text>
-                      <View style={{ backgroundColor: "#1E2130", paddingHorizontal: 10, paddingVertical: 3, borderRadius: 20 }}>
-                        <Text style={{ color: "#6B7280", fontSize: 12, fontWeight: "700" }}>{selProject?.members?.length ?? 0} total</Text>
+                      <Text style={{ color: C.textPrimary, fontSize: 14, fontWeight: "700" }}>Current members</Text>
+                      <View style={{ backgroundColor: C.card, paddingHorizontal: 10, paddingVertical: 3, borderRadius: 20 }}>
+                        <Text style={{ color: C.textMuted, fontSize: 11, fontWeight: "700" }}>{selProject?.members?.length ?? 0} total</Text>
                       </View>
                     </View>
 
-                    <View style={{ backgroundColor: "#0F1117", borderRadius: 16, borderWidth: 1, borderColor: "#1E2130", overflow: "hidden", marginBottom: 24 }}>
+                    <View style={{ backgroundColor: C.cardAlt, borderRadius: 16, overflow: "hidden", marginBottom: 22, borderWidth: 1, borderColor: C.cardBorder }}>
                       {(selProject?.members ?? []).length === 0 && (
                         <View style={{ padding: 20, alignItems: "center" }}>
-                          <Text style={{ color: "#6B7280", fontSize: 13 }}>No members yet.</Text>
+                          <Text style={{ color: C.textMuted, fontSize: 13 }}>No members yet.</Text>
                         </View>
                       )}
                       {(selProject?.members ?? []).map((m: any, idx: number) => {
@@ -767,26 +695,27 @@ export default function ProjectsScreen() {
                         const isCreator = mId === getProjectCreatorId(selProject);
                         const canManage = isOwnerOfSelected && !isMe;
                         const color = selProject?.color ?? themeColor;
+                        const total = selProject?.members?.length ?? 0;
 
                         return (
-                          <View key={mId ?? idx} style={{ flexDirection: "row", alignItems: "center", padding: 14, borderBottomWidth: idx < (selProject?.members?.length ?? 0) - 1 ? 1 : 0, borderBottomColor: "#161922" }}>
+                          <View key={mId ?? idx} style={{ flexDirection: "row", alignItems: "center", padding: 13, borderBottomWidth: idx < total - 1 ? 1 : 0, borderBottomColor: C.border }}>
                             <TouchableOpacity
                               onPress={() => uObj && (setProfileUser(uObj), setProfileVisible(true))}
-                              style={{ flex: 1, flexDirection: "row", alignItems: "center", gap: 12 }}
+                              style={{ flex: 1, flexDirection: "row", alignItems: "center", gap: 11 }}
                               activeOpacity={uObj ? 0.6 : 1}
                             >
-                              {uObj ? <Avatar userObj={uObj} size={40} /> : (
-                                <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: "#1E2130", alignItems: "center", justifyContent: "center" }}>
-                                  <Text style={{ color: "#6B7280" }}>?</Text>
+                              {uObj ? <Avatar userObj={uObj} size={38} /> : (
+                                <View style={{ width: 38, height: 38, borderRadius: 19, backgroundColor: C.card, alignItems: "center", justifyContent: "center" }}>
+                                  <Ionicons name="person" size={16} color={C.textMuted} />
                                 </View>
                               )}
                               <View style={{ flex: 1 }}>
                                 <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-                                  <Text style={{ color: "#fff", fontSize: 14, fontWeight: "700" }}>{uObj ? getFullName(uObj) : "Unknown"}</Text>
-                                  {isCreator && <View style={{ backgroundColor: `${color}22`, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}><Text style={{ color, fontSize: 9, fontWeight: "800" }}>OWNER</Text></View>}
-                                  {isMe && <View style={{ backgroundColor: "#1E2130", paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}><Text style={{ color: "#6B7280", fontSize: 9, fontWeight: "800" }}>YOU</Text></View>}
+                                  <Text style={{ color: C.textPrimary, fontSize: 13, fontWeight: "700" }}>{uObj ? getFullName(uObj) : "Unknown"}</Text>
+                                  {isCreator && <View style={{ backgroundColor: `${color}20`, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 5 }}><Text style={{ color, fontSize: 9, fontWeight: "800" }}>OWNER</Text></View>}
+                                  {isMe && <View style={{ backgroundColor: C.card, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 5 }}><Text style={{ color: C.textMuted, fontSize: 9, fontWeight: "800" }}>YOU</Text></View>}
                                 </View>
-                                <Text style={{ color: "#4A4A6A", fontSize: 11, marginTop: 1 }}>{uObj?.email ?? ""}</Text>
+                                <Text style={{ color: C.textMuted, fontSize: 11, marginTop: 1 }}>{uObj?.email ?? ""}</Text>
                               </View>
                               <RolePill role={m.role} accent={color} />
                             </TouchableOpacity>
@@ -796,20 +725,20 @@ export default function ProjectsScreen() {
                                 <TouchableOpacity
                                   onPress={() => handleRoleToggle(mId, m.role)}
                                   disabled={roleId === mId}
-                                  style={{ backgroundColor: "#1E2130", borderWidth: 1, borderColor: "#2A2D3E", paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 }}
+                                  style={{ backgroundColor: C.card, paddingHorizontal: 10, paddingVertical: 7, borderRadius: 9, borderWidth: 1, borderColor: C.cardBorder }}
                                 >
-                                  {roleId === mId
-                                    ? <ActivityIndicator size="small" color="#9B9BAE" />
-                                    : <Text style={{ color: "#9B9BAE", fontSize: 11, fontWeight: "700" }}>{m.role === "admin" ? "⬇ Demote" : "⬆ Promote"}</Text>}
+                                  {roleId === mId ? <ActivityIndicator size="small" color={C.textSecondary} /> : (
+                                    <Text style={{ color: C.textSecondary, fontSize: 11, fontWeight: "700" }}>{m.role === "admin" ? "Demote" : "Promote"}</Text>
+                                  )}
                                 </TouchableOpacity>
                                 <TouchableOpacity
                                   onPress={() => handleRemove(mId)}
                                   disabled={removingId === mId}
-                                  style={{ backgroundColor: "rgba(239,68,68,0.1)", borderWidth: 1, borderColor: "rgba(239,68,68,0.3)", paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 }}
+                                  style={{ backgroundColor: C.dangerBg, paddingHorizontal: 10, paddingVertical: 7, borderRadius: 9 }}
                                 >
-                                  {removingId === mId
-                                    ? <ActivityIndicator size="small" color="#ef4444" />
-                                    : <Text style={{ color: "#ef4444", fontSize: 11, fontWeight: "700" }}>Remove</Text>}
+                                  {removingId === mId ? <ActivityIndicator size="small" color={C.danger} /> : (
+                                    <Text style={{ color: C.danger, fontSize: 11, fontWeight: "700" }}>Remove</Text>
+                                  )}
                                 </TouchableOpacity>
                               </View>
                             )}
@@ -820,19 +749,17 @@ export default function ProjectsScreen() {
 
                     {!isViewer && (
                       <>
-                        {/* ── ADD MEMBER SECTION ── */}
-                        <Text style={{ color: "#fff", fontSize: 15, fontWeight: "800", marginBottom: 4 }}>Add Members</Text>
-                        <Text style={{ color: "#6B7280", fontSize: 13, marginBottom: 14 }}>
+                        <Text style={{ color: C.textPrimary, fontSize: 14, fontWeight: "700", marginBottom: 4 }}>Add members</Text>
+                        <Text style={{ color: C.textMuted, fontSize: 12, marginBottom: 14, lineHeight: 18 }}>
                           Search workspace members below. Type 2+ characters to search all users globally.
                         </Text>
 
-                        {/* Search box */}
-                        <View style={{ backgroundColor: "#0F1117", borderRadius: 14, borderWidth: 1, borderColor: "#2A2D3E", flexDirection: "row", alignItems: "center", paddingHorizontal: 14, marginBottom: 18 }}>
-                          <Text style={{ fontSize: 16, marginRight: 8 }}>🔍</Text>
+                        <View style={{ backgroundColor: C.cardAlt, borderRadius: 13, borderWidth: 1, borderColor: C.cardBorder, flexDirection: "row", alignItems: "center", paddingHorizontal: 13, marginBottom: 18 }}>
+                          <Ionicons name="search-outline" size={16} color={C.textMuted} style={{ marginRight: 8 }} />
                           <TextInput
-                            style={{ flex: 1, color: "#fff", fontSize: 14, paddingVertical: 13 }}
+                            style={{ flex: 1, color: C.textPrimary, fontSize: 14, paddingVertical: 12 }}
                             placeholder="Search by name or email..."
-                            placeholderTextColor="#3A3D4E"
+                            placeholderTextColor={C.textMuted}
                             value={query}
                             onChangeText={setQuery}
                             autoCorrect={false}
@@ -840,24 +767,18 @@ export default function ProjectsScreen() {
                           />
                           {searching && <ActivityIndicator size="small" color={themeColor} />}
                           {query.length > 0 && !searching && (
-                            <TouchableOpacity onPress={() => { setQuery(""); setGlobalResults([]); }}>
-                              <Text style={{ color: "#6B7280", fontSize: 20, lineHeight: 22 }}>×</Text>
+                            <TouchableOpacity onPress={() => { setQuery(""); setGlobalResults([]); }} hitSlop={8}>
+                              <Ionicons name="close-circle" size={18} color={C.textMuted} />
                             </TouchableOpacity>
                           )}
                         </View>
 
-                        {/* ── Workspace members list ── */}
-                        <Text style={{ color: "#6B7280", fontSize: 11, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 10 }}>
-                          From This Workspace
-                        </Text>
-
-                        <View style={{ backgroundColor: "#0F1117", borderRadius: 16, borderWidth: 1, borderColor: "#1E2130", overflow: "hidden", marginBottom: 20 }}>
+                        <SLabel text="From this workspace" />
+                        <View style={{ backgroundColor: C.cardAlt, borderRadius: 16, overflow: "hidden", marginBottom: 20, borderWidth: 1, borderColor: C.cardBorder }}>
                           {availableWsMembers.length === 0 ? (
                             <View style={{ padding: 20, alignItems: "center" }}>
-                              <Text style={{ color: "#6B7280", fontSize: 13, textAlign: "center" }}>
-                                {query.trim()
-                                  ? "No workspace members match your search."
-                                  : "All workspace members are already in this project."}
+                              <Text style={{ color: C.textMuted, fontSize: 13, textAlign: "center" }}>
+                                {query.trim() ? "No workspace members match your search." : "All workspace members are already in this project."}
                               </Text>
                             </View>
                           ) : availableWsMembers.map((wm: any, idx: number) => {
@@ -867,81 +788,100 @@ export default function ProjectsScreen() {
                             const color = selProject?.color ?? themeColor;
 
                             return (
-                              <View key={wmId ?? idx} style={{ flexDirection: "row", alignItems: "center", padding: 14, borderBottomWidth: idx < availableWsMembers.length - 1 ? 1 : 0, borderBottomColor: "#161922" }}>
-                                <TouchableOpacity onPress={() => uObj && (setProfileUser(uObj), setProfileVisible(true))} style={{ flex: 1, flexDirection: "row", alignItems: "center", gap: 12 }} activeOpacity={uObj ? 0.6 : 1}>
-                                  {uObj ? <Avatar userObj={uObj} size={40} /> : (
-                                    <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: "#1E2130", alignItems: "center", justifyContent: "center" }}>
-                                      <Text style={{ color: "#6B7280" }}>?</Text>
+                              <View key={wmId ?? idx} style={{ flexDirection: "row", alignItems: "center", padding: 13, borderBottomWidth: idx < availableWsMembers.length - 1 ? 1 : 0, borderBottomColor: C.border }}>
+                                <TouchableOpacity onPress={() => uObj && (setProfileUser(uObj), setProfileVisible(true))} style={{ flex: 1, flexDirection: "row", alignItems: "center", gap: 11 }} activeOpacity={uObj ? 0.6 : 1}>
+                                  {uObj ? <Avatar userObj={uObj} size={38} /> : (
+                                    <View style={{ width: 38, height: 38, borderRadius: 19, backgroundColor: C.card, alignItems: "center", justifyContent: "center" }}>
+                                      <Ionicons name="person" size={16} color={C.textMuted} />
                                     </View>
                                   )}
                                   <View style={{ flex: 1 }}>
-                                    <Text style={{ color: "#fff", fontSize: 14, fontWeight: "600" }}>{uObj ? getFullName(uObj) : "Unknown"}</Text>
-                                    <Text style={{ color: "#4A4A6A", fontSize: 11, marginTop: 1 }}>{uObj?.email ?? ""}</Text>
+                                    <Text style={{ color: C.textPrimary, fontSize: 13, fontWeight: "600" }}>{uObj ? getFullName(uObj) : "Unknown"}</Text>
+                                    <Text style={{ color: C.textMuted, fontSize: 11, marginTop: 1 }}>{uObj?.email ?? ""}</Text>
                                   </View>
                                 </TouchableOpacity>
 
-                                {/* ✅ ADD BUTTON — clearly visible */}
                                 <TouchableOpacity
                                   onPress={() => handleAddWsMember(wmId)}
                                   disabled={loading}
-                                  style={{ backgroundColor: "#1E2130", borderWidth: 1.5, borderColor: color, paddingHorizontal: 14, paddingVertical: 9, borderRadius: 10, flexDirection: "row", alignItems: "center", gap: 5 }}
+                                  style={{ backgroundColor: C.accentBg, borderWidth: 1.5, borderColor: C.accentBorder, paddingHorizontal: 13, paddingVertical: 9, borderRadius: 10, flexDirection: "row", alignItems: "center", gap: 4 }}
                                 >
-                                  {loading
-                                    ? <ActivityIndicator size="small" color={color} />
-                                    : <>
-                                      <Text style={{ fontSize: 12 }}>✉️</Text>
-                                      <Text style={{ color, fontSize: 12, fontWeight: "800" }}>Invite</Text>
-                                    </>}
+                                  {loading ? <ActivityIndicator size="small" color={C.accent} /> : (
+                                    <>
+                                      <Ionicons name="add" size={14} color={C.accent} />
+                                      <Text style={{ color: C.accent, fontSize: 12, fontWeight: "700" }}>Invite</Text>
+                                    </>
+                                  )}
                                 </TouchableOpacity>
                               </View>
                             );
                           })}
                         </View>
+
+                        {globalResults.length > 0 && (
+                          <>
+                            <SLabel text="Global search results" />
+                            <View style={{ backgroundColor: C.cardAlt, borderRadius: 16, overflow: "hidden", marginBottom: 20, borderWidth: 1, borderColor: C.cardBorder }}>
+                              {globalResults.map((u, idx) => {
+                                const loading = inviteId === u._id;
+                                const name = getFullName({ username: u.username });
+                                const color = selProject?.color ?? themeColor;
+                                return (
+                                  <View key={u._id} style={{ flexDirection: "row", alignItems: "center", padding: 13, borderBottomWidth: idx < globalResults.length - 1 ? 1 : 0, borderBottomColor: C.border }}>
+                                    <View style={{ flex: 1, flexDirection: "row", alignItems: "center", gap: 11 }}>
+                                      <Avatar userObj={{ username: u.username }} size={38} />
+                                      <View style={{ flex: 1 }}>
+                                        <Text style={{ color: C.textPrimary, fontSize: 13, fontWeight: "600" }}>{name}</Text>
+                                        <Text style={{ color: C.textMuted, fontSize: 11, marginTop: 1 }}>{u.email}</Text>
+                                      </View>
+                                    </View>
+                                    <TouchableOpacity
+                                      onPress={() => handleInviteAndAdd(u)}
+                                      disabled={loading}
+                                      style={{ backgroundColor: `${color}18`, borderWidth: 1.5, borderColor: `${color}45`, paddingHorizontal: 12, paddingVertical: 9, borderRadius: 10, flexDirection: "row", alignItems: "center", gap: 4 }}
+                                    >
+                                      {loading ? <ActivityIndicator size="small" color={color} /> : (
+                                        <>
+                                          <Ionicons name="person-add-outline" size={13} color={color} />
+                                          <Text style={{ color, fontSize: 12, fontWeight: "700" }}>Invite & Add</Text>
+                                        </>
+                                      )}
+                                    </TouchableOpacity>
+                                  </View>
+                                );
+                              })}
+                            </View>
+                          </>
+                        )}
                       </>
                     )}
                   </>
                 )}
 
                 {settingsTab === "milestones" && (
-                  <View style={{ gap: 20, marginBottom: 20 }}>
-                    {/* ── COVER IMAGE SECTION ── */}
+                  <View style={{ gap: 20 }}>
+                    {/* Cover image */}
                     <View>
-                      <Text style={{ color: "#fff", fontSize: 15, fontWeight: "800", marginBottom: 10 }}>Cover Image Banner</Text>
-                      <View style={{ backgroundColor: "#0F1117", borderRadius: 16, borderWidth: 1, borderColor: "#1E2130", overflow: "hidden", position: "relative" }}>
+                      <Text style={{ color: C.textPrimary, fontSize: 14, fontWeight: "700", marginBottom: 10 }}>Cover image banner</Text>
+                      <View style={{ backgroundColor: C.card, borderRadius: 16, overflow: "hidden", borderWidth: 1, borderColor: C.cardBorder, position: "relative" }}>
                         {selProject?.coverImageUrl ? (
                           <Image source={{ uri: selProject.coverImageUrl }} style={{ width: "100%", height: 110 }} resizeMode="cover" />
                         ) : (
-                          <View style={{ width: "100%", height: 110, backgroundColor: "#161922", alignItems: "center", justifyContent: "center" }}>
-                            <Text style={{ color: "#4A4A6A", fontSize: 13 }}>No cover image banner set</Text>
+                          <View style={{ width: "100%", height: 110, backgroundColor: C.bg, alignItems: "center", justifyContent: "center", gap: 6 }}>
+                            <Ionicons name="image-outline" size={28} color={C.textMuted} />
+                            <Text style={{ color: C.textMuted, fontSize: 12 }}>No cover image set</Text>
                           </View>
                         )}
                         {!isViewer && (
                           <TouchableOpacity
                             onPress={() => pickCoverImage(false)}
                             disabled={uploadingCover}
-                            style={{
-                              position: "absolute",
-                              bottom: 10,
-                              right: 10,
-                              backgroundColor: "rgba(15,17,23,0.8)",
-                              borderWidth: 1,
-                              borderColor: "#2A2D3E",
-                              paddingHorizontal: 12,
-                              paddingVertical: 6,
-                              borderRadius: 8,
-                              flexDirection: "row",
-                              alignItems: "center",
-                              gap: 6
-                            }}
+                            style={{ position: "absolute", bottom: 10, right: 10, backgroundColor: "rgba(21,23,28,0.85)", borderWidth: 1, borderColor: C.cardBorder, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 9, flexDirection: "row", alignItems: "center", gap: 6 }}
                           >
-                            {uploadingCover ? (
-                              <ActivityIndicator size="small" color={selProject?.color ?? themeColor} />
-                            ) : (
+                            {uploadingCover ? <ActivityIndicator size="small" color={selProject?.color ?? themeColor} /> : (
                               <>
-                                <Text style={{ color: "#fff", fontSize: 11 }}>📷</Text>
-                                <Text style={{ color: "#fff", fontSize: 11, fontWeight: "700" }}>
-                                  {selProject?.coverImageUrl ? "Change Cover" : "Upload Cover"}
-                                </Text>
+                                <Ionicons name="camera-outline" size={13} color={C.textPrimary} />
+                                <Text style={{ color: C.textPrimary, fontSize: 11, fontWeight: "700" }}>{selProject?.coverImageUrl ? "Change" : "Upload"}</Text>
                               </>
                             )}
                           </TouchableOpacity>
@@ -949,76 +889,35 @@ export default function ProjectsScreen() {
                       </View>
                     </View>
 
-                    {/* ── MILESTONES LIST SECTION ── */}
+                    {/* Milestones list */}
                     <View>
                       <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-                        <Text style={{ color: "#fff", fontSize: 15, fontWeight: "800" }}>Milestones</Text>
+                        <Text style={{ color: C.textPrimary, fontSize: 14, fontWeight: "700" }}>Milestones</Text>
                         {loadingMilestones && <ActivityIndicator size="small" color={selProject?.color ?? themeColor} />}
                       </View>
 
-                      {loadingMilestones ? (
-                        <View style={{ padding: 20, alignItems: "center" }}>
-                          <ActivityIndicator size="small" color={selProject?.color ?? themeColor} />
-                        </View>
-                      ) : milestones.length === 0 ? (
-                        <View style={{ backgroundColor: "#0F1117", borderRadius: 16, borderWidth: 1, borderColor: "#1E2130", padding: 20, alignItems: "center" }}>
-                          <Text style={{ color: "#6B7280", fontSize: 13 }}>No milestones set for this project.</Text>
+                      {milestones.length === 0 && !loadingMilestones ? (
+                        <View style={{ backgroundColor: C.card, borderRadius: 14, borderWidth: 1, borderColor: C.cardBorder, padding: 20, alignItems: "center" }}>
+                          <Text style={{ color: C.textMuted, fontSize: 13 }}>No milestones set for this project.</Text>
                         </View>
                       ) : (
-                        <View style={{ gap: 10 }}>
+                        <View style={{ gap: 8 }}>
                           {milestones.map((m) => (
-                            <View
-                              key={m._id}
-                              style={{
-                                flexDirection: "row",
-                                alignItems: "center",
-                                backgroundColor: "#0F1117",
-                                borderRadius: 16,
-                                borderWidth: 1,
-                                borderColor: m.status === "completed" ? "rgba(194,241,147,0.15)" : "#1E2130",
-                                padding: 14,
-                                gap: 12
-                              }}
-                            >
+                            <View key={m._id} style={{ flexDirection: "row", alignItems: "center", backgroundColor: C.card, borderRadius: 14, borderWidth: 1, borderColor: m.status === "completed" ? `${C.done}30` : C.cardBorder, padding: 13, gap: 11 }}>
                               <TouchableOpacity
                                 onPress={() => !isViewer && handleToggleMilestone(m)}
                                 disabled={isViewer}
-                                style={{
-                                  width: 20,
-                                  height: 20,
-                                  borderRadius: 6,
-                                  borderWidth: 2,
-                                  borderColor: m.status === "completed" ? themeColor : "#4A4A6A",
-                                  backgroundColor: m.status === "completed" ? themeColor : "transparent",
-                                  alignItems: "center",
-                                  justifyContent: "center"
-                                }}
+                                style={{ width: 22, height: 22, borderRadius: 7, borderWidth: 2, borderColor: m.status === "completed" ? C.done : C.borderLight, backgroundColor: m.status === "completed" ? C.done : "transparent", alignItems: "center", justifyContent: "center" }}
                               >
-                                {m.status === "completed" && <Text style={{ color: "#0F1117", fontSize: 11, fontWeight: "bold" }}>✓</Text>}
+                                {m.status === "completed" && <Ionicons name="checkmark" size={13} color={C.onAccent} />}
                               </TouchableOpacity>
-
                               <View style={{ flex: 1 }}>
-                                <Text
-                                  style={{
-                                    color: m.status === "completed" ? "#6B7280" : "#fff",
-                                    fontSize: 14,
-                                    fontWeight: "700",
-                                    textDecorationLine: m.status === "completed" ? "line-through" : "none"
-                                  }}
-                                >
-                                  {m.title}
-                                </Text>
-                                {m.description ? (
-                                  <Text style={{ color: "#4A4A6A", fontSize: 12, marginTop: 2 }}>{m.description}</Text>
-                                ) : null}
+                                <Text style={{ color: m.status === "completed" ? C.textMuted : C.textPrimary, fontSize: 13, fontWeight: "700", textDecorationLine: m.status === "completed" ? "line-through" : "none" }}>{m.title}</Text>
+                                {m.description ? <Text style={{ color: C.textMuted, fontSize: 11, marginTop: 2 }}>{m.description}</Text> : null}
                               </View>
-
                               {!isViewer && (
-                                <TouchableOpacity
-                                  onPress={() => handleDeleteMilestone(m._id)}
-                                  style={{ padding: 4 }}
-                                >
-                                  <Text style={{ color: "#ef4444", fontSize: 16 }}>×</Text>
+                                <TouchableOpacity onPress={() => handleDeleteMilestone(m._id)} hitSlop={8}>
+                                  <Ionicons name="close-circle-outline" size={18} color={C.danger} />
                                 </TouchableOpacity>
                               )}
                             </View>
@@ -1027,71 +926,33 @@ export default function ProjectsScreen() {
                       )}
                     </View>
 
-                    {/* ── CREATE MILESTONE SECTION ── */}
+                    {/* Create milestone */}
                     {!isViewer && (
-                      <View style={{ marginTop: 6 }}>
-                        <Text style={{ color: "#fff", fontSize: 15, fontWeight: "800", marginBottom: 12 }}>Create Milestone</Text>
-                        
-                        <View style={{ backgroundColor: "#0F1117", borderRadius: 16, borderWidth: 1, borderColor: "#1E2130", padding: 16, gap: 12 }}>
+                      <View>
+                        <Text style={{ color: C.textPrimary, fontSize: 14, fontWeight: "700", marginBottom: 12 }}>Create milestone</Text>
+                        <View style={{ backgroundColor: C.card, borderRadius: 16, borderWidth: 1, borderColor: C.cardBorder, padding: 14, gap: 10 }}>
                           <TextInput
-                            style={{
-                              backgroundColor: "#161922",
-                              borderRadius: 12,
-                              borderWidth: 1,
-                              borderColor: "#2A2D3E",
-                              color: "#fff",
-                              fontSize: 14,
-                              paddingHorizontal: 14,
-                              paddingVertical: 12
-                            }}
-                            placeholder="Milestone Title..."
-                            placeholderTextColor="#3A3D4E"
+                            style={{ backgroundColor: C.bg, borderRadius: 11, borderWidth: 1, borderColor: C.border, color: C.textPrimary, fontSize: 14, paddingHorizontal: 14, paddingVertical: 12 }}
+                            placeholder="Milestone title..."
+                            placeholderTextColor={C.textMuted}
                             value={newMilestoneTitle}
                             onChangeText={setNewMilestoneTitle}
                           />
-
                           <TextInput
-                            style={{
-                              backgroundColor: "#161922",
-                              borderRadius: 12,
-                              borderWidth: 1,
-                              borderColor: "#2A2D3E",
-                              color: "#fff",
-                              fontSize: 14,
-                              paddingHorizontal: 14,
-                              paddingVertical: 12,
-                              minHeight: 60,
-                              textAlignVertical: "top"
-                            }}
-                            placeholder="Milestone Description (optional)..."
-                            placeholderTextColor="#3A3D4E"
+                            style={{ backgroundColor: C.bg, borderRadius: 11, borderWidth: 1, borderColor: C.border, color: C.textPrimary, fontSize: 14, paddingHorizontal: 14, paddingVertical: 12, minHeight: 60, textAlignVertical: "top" }}
+                            placeholder="Description (optional)..."
+                            placeholderTextColor={C.textMuted}
                             value={newMilestoneDesc}
                             onChangeText={setNewMilestoneDesc}
                             multiline
                           />
-
                           <TouchableOpacity
                             onPress={handleCreateMilestone}
                             disabled={creatingMilestone || !newMilestoneTitle.trim()}
-                            style={{
-                              backgroundColor: newMilestoneTitle.trim() ? (selProject?.color ?? themeColor) : "#1E2130",
-                              paddingVertical: 14,
-                              borderRadius: 12,
-                              alignItems: "center"
-                            }}
+                            style={{ backgroundColor: newMilestoneTitle.trim() ? (selProject?.color ?? themeColor) : C.surface, paddingVertical: 13, borderRadius: 12, alignItems: "center" }}
                           >
-                            {creatingMilestone ? (
-                              <ActivityIndicator size="small" color="#0F1117" />
-                            ) : (
-                              <Text
-                                style={{
-                                  color: newMilestoneTitle.trim() ? "#0F1117" : "#4A4A6A",
-                                  fontWeight: "800",
-                                  fontSize: 14
-                                }}
-                              >
-                                Create Milestone
-                              </Text>
+                            {creatingMilestone ? <ActivityIndicator size="small" color={C.onAccent} /> : (
+                              <Text style={{ color: newMilestoneTitle.trim() ? C.onAccent : C.textMuted, fontWeight: "700", fontSize: 14 }}>Create milestone</Text>
                             )}
                           </TouchableOpacity>
                         </View>
@@ -1100,27 +961,23 @@ export default function ProjectsScreen() {
                   </View>
                 )}
 
-                {/* ── Delete project (owner only) ── */}
+                {/* Delete project */}
                 {isOwnerOfSelected && !isViewer && (
                   <>
-                    <View style={{ height: 1, backgroundColor: "#1E2130", marginVertical: 6, marginBottom: 18 }} />
+                    <Divider />
                     <TouchableOpacity
                       onPress={() => handleDelete(selProject._id)}
-                      style={{ backgroundColor: "rgba(239,68,68,0.08)", borderWidth: 1.5, borderColor: "rgba(239,68,68,0.3)", paddingVertical: 15, borderRadius: 16, alignItems: "center", marginBottom: 10 }}
+                      style={{ backgroundColor: C.dangerBg, borderWidth: 1, borderColor: C.dangerBorder, paddingVertical: 14, borderRadius: 14, alignItems: "center", flexDirection: "row", justifyContent: "center", gap: 7, marginBottom: 10 }}
                     >
-                      <Text style={{ color: "#ef4444", fontWeight: "800", fontSize: 14 }}>🗑  Delete Project</Text>
+                      <Ionicons name="trash-outline" size={15} color={C.danger} />
+                      <Text style={{ color: C.danger, fontWeight: "700", fontSize: 14 }}>Delete Project</Text>
                     </TouchableOpacity>
                   </>
                 )}
 
-                {/* ── Close ── */}
-                <TouchableOpacity
-                  onPress={closeManage}
-                  style={{ backgroundColor: "#1E2130", borderWidth: 1, borderColor: "#2A2D3E", paddingVertical: 14, borderRadius: 16, alignItems: "center" }}
-                >
-                  <Text style={{ color: "#9B9BAE", fontWeight: "700", fontSize: 14 }}>Close</Text>
+                <TouchableOpacity onPress={closeManage} style={{ backgroundColor: C.card, borderWidth: 1, borderColor: C.cardBorder, paddingVertical: 14, borderRadius: 14, alignItems: "center" }}>
+                  <Text style={{ color: C.textSecondary, fontWeight: "700", fontSize: 14 }}>Close</Text>
                 </TouchableOpacity>
-
               </ScrollView>
             </View>
           </View>
@@ -1131,26 +988,23 @@ export default function ProjectsScreen() {
           MODAL 3 ── USER PROFILE
       ══════════════════════════════════════════════════════════ */}
       <Modal visible={profileVisible} transparent animationType="fade" onRequestClose={() => setProfileVisible(false)}>
-        <TouchableOpacity activeOpacity={1} onPress={() => setProfileVisible(false)} style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.7)", justifyContent: "center", alignItems: "center", paddingHorizontal: 20 }}>
-          <TouchableOpacity activeOpacity={1} style={{ width: "100%", backgroundColor: "#161922", borderRadius: 24, padding: 24, borderWidth: 1, borderColor: "#1E2130" }}>
-
-            <View style={{ alignItems: "center", marginBottom: 20 }}>
-              {profileUser && <Avatar userObj={profileUser} size={72} />}
-              <Text style={{ color: "#fff", fontSize: 20, fontWeight: "800", marginTop: 12 }}>{profileUser ? getFullName(profileUser) : "User"}</Text>
-              <Text style={{ color: "#6B7280", fontSize: 13, marginTop: 3 }}>{profileUser?.email ?? ""}</Text>
+        <TouchableOpacity activeOpacity={1} onPress={() => setProfileVisible(false)} style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.65)", justifyContent: "center", alignItems: "center", paddingHorizontal: 20 }}>
+          <TouchableOpacity activeOpacity={1} style={{ width: "100%", backgroundColor: C.surface, borderRadius: 22, padding: 22, borderWidth: 1, borderColor: C.cardBorder }}>
+            <View style={{ alignItems: "center", marginBottom: 18 }}>
+              {profileUser && <Avatar userObj={profileUser} size={68} />}
+              <Text style={{ color: C.textPrimary, fontSize: 18, fontWeight: "700", marginTop: 12 }}>{profileUser ? getFullName(profileUser) : "User"}</Text>
+              <Text style={{ color: C.textMuted, fontSize: 13, marginTop: 3 }}>{profileUser?.email ?? ""}</Text>
               {profileUser && (() => {
                 const wm = (activeWorkspace?.members ?? []).find((m: any) => getUserId(m.user) === profileUser._id);
                 return wm ? (
-                  <View style={{ backgroundColor: "#1E2130", borderWidth: 1, borderColor: "#2A2D3E", paddingHorizontal: 12, paddingVertical: 5, borderRadius: 20, marginTop: 10 }}>
-                    <Text style={{ color: "#9B9BAE", fontSize: 12, fontWeight: "700", textTransform: "capitalize" }}>Workspace {wm.role}</Text>
+                  <View style={{ backgroundColor: C.card, borderWidth: 1, borderColor: C.cardBorder, paddingHorizontal: 12, paddingVertical: 5, borderRadius: 20, marginTop: 10 }}>
+                    <Text style={{ color: C.textSecondary, fontSize: 12, fontWeight: "700", textTransform: "capitalize" }}>Workspace {wm.role}</Text>
                   </View>
                 ) : null;
               })()}
             </View>
 
-            <Text style={{ color: "#6B7280", fontSize: 11, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 10 }}>
-              Projects ({projects.filter((p: any) => p.members.some((m: any) => getUserId(m.user) === profileUser?._id)).length})
-            </Text>
+            <SLabel text={`Projects (${projects.filter((p: any) => p.members.some((m: any) => getUserId(m.user) === profileUser?._id)).length})`} />
 
             <ScrollView style={{ maxHeight: 180 }} showsVerticalScrollIndicator={false}>
               {projects
@@ -1158,10 +1012,10 @@ export default function ProjectsScreen() {
                 .map((proj: any) => {
                   const role = proj.members.find((m: any) => getUserId(m.user) === profileUser?._id)?.role ?? "member";
                   return (
-                    <View key={proj._id} style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", backgroundColor: "#0F1117", borderWidth: 1, borderColor: "#1E2130", padding: 12, borderRadius: 12, marginBottom: 8 }}>
+                    <View key={proj._id} style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", backgroundColor: C.card, borderWidth: 1, borderColor: C.cardBorder, padding: 12, borderRadius: 12, marginBottom: 8 }}>
                       <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
                         <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: proj.color ?? themeColor }} />
-                        <Text style={{ color: "#fff", fontSize: 13, fontWeight: "600" }}>{proj.name}</Text>
+                        <Text style={{ color: C.textPrimary, fontSize: 13, fontWeight: "600" }}>{proj.name}</Text>
                       </View>
                       <RolePill role={role} accent={proj.color ?? themeColor} />
                     </View>
@@ -1169,8 +1023,8 @@ export default function ProjectsScreen() {
                 })}
             </ScrollView>
 
-            <TouchableOpacity onPress={() => setProfileVisible(false)} style={{ backgroundColor: "#1E2130", borderWidth: 1, borderColor: "#2A2D3E", paddingVertical: 14, borderRadius: 14, alignItems: "center", marginTop: 16 }}>
-              <Text style={{ color: "#9B9BAE", fontWeight: "700" }}>Close</Text>
+            <TouchableOpacity onPress={() => setProfileVisible(false)} style={{ backgroundColor: C.card, borderWidth: 1, borderColor: C.cardBorder, paddingVertical: 14, borderRadius: 13, alignItems: "center", marginTop: 16 }}>
+              <Text style={{ color: C.textSecondary, fontWeight: "700" }}>Close</Text>
             </TouchableOpacity>
           </TouchableOpacity>
         </TouchableOpacity>

@@ -12,18 +12,20 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.logout = exports.forgetPass = exports.updateUserProfile = exports.profile = exports.login = exports.signup = void 0;
+exports.deleteSavedFilterController = exports.getSavedFiltersController = exports.saveFilterController = exports.updateAvatarController = exports.getPinnedItemsController = exports.togglePinTaskController = exports.togglePinProjectController = exports.updatePreferences = exports.logout = exports.forgetPass = exports.updateUserProfile = exports.profile = exports.login = exports.signup = void 0;
 const express_validator_1 = require("express-validator");
 const user_service_1 = require("../services/user.service"); // Named import
 const user_model_1 = __importDefault(require("../model/user.model"));
+const cloudinary_1 = __importDefault(require("../config/cloudinary"));
+const fs_1 = __importDefault(require("fs"));
 const signup = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     const errors = (0, express_validator_1.validationResult)(req);
     if (!errors.isEmpty()) {
         return res.status(400).json({ errors: errors.array() });
     }
-    const { username: { firstname, lastname }, email, password, age, gender, usertype, phone } = req.body;
+    const { username: { firstname, lastname }, email, password, gender, usertype, phone } = req.body;
     try {
-        const newUser = yield (0, user_service_1.createUser)({ firstname, lastname, email, password, age, gender, usertype, phone });
+        const newUser = yield (0, user_service_1.createUser)({ firstname, lastname, email, password, gender, usertype, phone });
         const token = newUser.generateToken();
         console.log("New user created:", newUser); // Debugging log
         return res.status(201).json({ success: true, user: newUser, token });
@@ -52,9 +54,7 @@ const login = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     }
     //match found, generate token now
     const token = user.generateToken();
-    console.log("User logged in:", user); // Debugging
-    console.log("Generated login Token:", token); // Debugging
-    return res.status(200).json({ user, token });
+    return res.status(200).json({ success: true, user, token });
 });
 exports.login = login;
 const profile = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
@@ -108,3 +108,234 @@ const logout = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     console.log("Logout token:", token); // Debugging log
 });
 exports.logout = logout;
+const updatePreferences = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    var _a, _b, _c, _d, _e, _f, _g, _h;
+    try {
+        const userId = req.user._id;
+        const { comments, assignments, mentions, reminders } = req.body;
+        const user = yield user_model_1.default.findById(userId);
+        if (!user) {
+            return res.status(404).json({ success: false, message: "User not found" });
+        }
+        user.notificationPreferences = {
+            comments: comments !== undefined ? comments : ((_b = (_a = user.notificationPreferences) === null || _a === void 0 ? void 0 : _a.comments) !== null && _b !== void 0 ? _b : true),
+            assignments: assignments !== undefined ? assignments : ((_d = (_c = user.notificationPreferences) === null || _c === void 0 ? void 0 : _c.assignments) !== null && _d !== void 0 ? _d : true),
+            mentions: mentions !== undefined ? mentions : ((_f = (_e = user.notificationPreferences) === null || _e === void 0 ? void 0 : _e.mentions) !== null && _f !== void 0 ? _f : true),
+            reminders: reminders !== undefined ? reminders : ((_h = (_g = user.notificationPreferences) === null || _g === void 0 ? void 0 : _g.reminders) !== null && _h !== void 0 ? _h : true),
+        };
+        yield user.save();
+        return res.status(200).json({
+            success: true,
+            user,
+        });
+    }
+    catch (error) {
+        return res.status(500).json({
+            success: false,
+            message: error.message || "Failed to update notification preferences",
+        });
+    }
+});
+exports.updatePreferences = updatePreferences;
+const togglePinProjectController = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const userId = req.user._id;
+        const { projectId } = req.params;
+        const user = yield user_model_1.default.findById(userId);
+        if (!user) {
+            return res.status(404).json({ success: false, message: "User not found" });
+        }
+        if (!user.pinnedProjects) {
+            user.pinnedProjects = [];
+        }
+        const index = user.pinnedProjects.indexOf(projectId);
+        if (index > -1) {
+            user.pinnedProjects.splice(index, 1);
+        }
+        else {
+            user.pinnedProjects.push(projectId);
+        }
+        yield user.save();
+        return res.status(200).json({ success: true, pinnedProjects: user.pinnedProjects });
+    }
+    catch (error) {
+        return res.status(500).json({ success: false, message: error.message || "Failed to toggle pin project" });
+    }
+});
+exports.togglePinProjectController = togglePinProjectController;
+const togglePinTaskController = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const userId = req.user._id;
+        const { taskId } = req.params;
+        const user = yield user_model_1.default.findById(userId);
+        if (!user) {
+            return res.status(404).json({ success: false, message: "User not found" });
+        }
+        if (!user.pinnedTasks) {
+            user.pinnedTasks = [];
+        }
+        const index = user.pinnedTasks.indexOf(taskId);
+        if (index > -1) {
+            user.pinnedTasks.splice(index, 1);
+        }
+        else {
+            user.pinnedTasks.push(taskId);
+        }
+        yield user.save();
+        return res.status(200).json({ success: true, pinnedTasks: user.pinnedTasks });
+    }
+    catch (error) {
+        return res.status(500).json({ success: false, message: error.message || "Failed to toggle pin task" });
+    }
+});
+exports.togglePinTaskController = togglePinTaskController;
+const getPinnedItemsController = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const userId = req.user._id;
+        const user = yield user_model_1.default.findById(userId)
+            .populate({
+            path: "pinnedProjects",
+            match: { isDeleted: { $ne: true } }
+        })
+            .populate({
+            path: "pinnedTasks",
+            match: { isDeleted: { $ne: true } },
+            populate: [
+                { path: "assignedTo", select: "username email" },
+                { path: "createdBy", select: "username email" }
+            ]
+        });
+        if (!user) {
+            return res.status(404).json({ success: false, message: "User not found" });
+        }
+        return res.status(200).json({
+            success: true,
+            pinnedProjects: user.pinnedProjects || [],
+            pinnedTasks: user.pinnedTasks || [],
+        });
+    }
+    catch (error) {
+        return res.status(500).json({ success: false, message: error.message || "Failed to fetch pinned items" });
+    }
+});
+exports.getPinnedItemsController = getPinnedItemsController;
+const updateAvatarController = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const userId = req.user._id;
+        if (!req.file) {
+            return res.status(400).json({ success: false, message: "No file uploaded" });
+        }
+        // Upload file to Cloudinary
+        const result = yield cloudinary_1.default.uploader.upload(req.file.path, {
+            folder: "user-avatars",
+            resource_type: "image",
+        });
+        // Remove local temp file
+        fs_1.default.unlink(req.file.path, (err) => {
+            if (err)
+                console.error("Failed to delete local temp avatar file:", err);
+        });
+        // Update user avatarUrl in database
+        const user = yield user_model_1.default.findByIdAndUpdate(userId, { avatarUrl: result.secure_url }, { new: true });
+        if (!user) {
+            return res.status(404).json({ success: false, message: "User not found" });
+        }
+        return res.status(200).json({
+            success: true,
+            message: "Avatar updated successfully",
+            user: {
+                _id: user._id,
+                username: user.username,
+                email: user.email,
+                avatarUrl: user.avatarUrl,
+                pinnedProjects: user.pinnedProjects,
+                pinnedTasks: user.pinnedTasks,
+                notificationPreferences: user.notificationPreferences
+            }
+        });
+    }
+    catch (error) {
+        if (req.file && fs_1.default.existsSync(req.file.path)) {
+            fs_1.default.unlink(req.file.path, () => { });
+        }
+        return res.status(500).json({ success: false, message: error.message || "Failed to update avatar" });
+    }
+});
+exports.updateAvatarController = updateAvatarController;
+const saveFilterController = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const userId = req.user._id;
+        const { projectId, filterName, query } = req.body;
+        if (!projectId || !filterName || !query) {
+            return res.status(400).json({ success: false, message: "Missing required fields" });
+        }
+        const user = yield user_model_1.default.findById(userId);
+        if (!user) {
+            return res.status(404).json({ success: false, message: "User not found" });
+        }
+        if (!user.savedFilters)
+            user.savedFilters = [];
+        user.savedFilters.push({
+            name: filterName,
+            project: projectId,
+            query
+        });
+        yield user.save();
+        return res.status(200).json({
+            success: true,
+            message: "Filter saved successfully",
+            savedFilters: user.savedFilters
+        });
+    }
+    catch (error) {
+        return res.status(500).json({ success: false, message: error.message || "Failed to save filter" });
+    }
+});
+exports.saveFilterController = saveFilterController;
+const getSavedFiltersController = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const userId = req.user._id;
+        const { projectId } = req.params;
+        if (!projectId) {
+            return res.status(400).json({ success: false, message: "Project ID is required" });
+        }
+        const user = yield user_model_1.default.findById(userId);
+        if (!user) {
+            return res.status(404).json({ success: false, message: "User not found" });
+        }
+        const filters = (user.savedFilters || []).filter(f => f.project.toString() === projectId);
+        return res.status(200).json({
+            success: true,
+            savedFilters: filters
+        });
+    }
+    catch (error) {
+        return res.status(500).json({ success: false, message: error.message || "Failed to fetch saved filters" });
+    }
+});
+exports.getSavedFiltersController = getSavedFiltersController;
+const deleteSavedFilterController = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const userId = req.user._id;
+        const { filterId } = req.params;
+        if (!filterId) {
+            return res.status(400).json({ success: false, message: "Filter ID is required" });
+        }
+        const user = yield user_model_1.default.findById(userId);
+        if (!user) {
+            return res.status(404).json({ success: false, message: "User not found" });
+        }
+        if (user.savedFilters) {
+            user.savedFilters = user.savedFilters.filter(f => f._id.toString() !== filterId);
+            yield user.save();
+        }
+        return res.status(200).json({
+            success: true,
+            message: "Saved filter deleted successfully"
+        });
+    }
+    catch (error) {
+        return res.status(500).json({ success: false, message: error.message || "Failed to delete saved filter" });
+    }
+});
+exports.deleteSavedFilterController = deleteSavedFilterController;

@@ -23,11 +23,11 @@ import { updateProfileApi, updatePreferencesApi, uploadAvatarApi } from "../../a
 const GENDERS = ["male", "female", "other"];
 
 const THEME_COLORS = [
-  { name: "Indigo", color: "#5865F2" },
-  { name: "Lime", color: "#C2F193" },
-  { name: "Blue", color: "#3A76E1" },
-  { name: "Purple", color: "#E8D4F5" },
-  { name: "Orange", color: "#FED7AA" },
+  { name: "Indigo", color: "#6366F1" },   // Modern primary
+  { name: "Emerald", color: "#10B981" },  // Fresh green
+  { name: "Sky", color: "#0EA5E9" },      // Bright blue
+  { name: "Rose", color: "#F43F5E" },     // Soft pink/red
+  { name: "Amber", color: "#F59E0B" },    // Warm orange/yellow
 ];
 
 const SCREEN_HEIGHT = Dimensions.get("window").height;
@@ -164,7 +164,7 @@ export default function ProfileScreen() {
   };
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: C.bg }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: C.bg }} edges={['top', 'left', 'right']}>
       <StatusBar barStyle="light-content" backgroundColor={C.bg} />
 
       <ScrollView

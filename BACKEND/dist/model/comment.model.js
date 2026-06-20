@@ -50,6 +50,19 @@ const commentSchema = new mongoose_1.Schema({
         ref: "User",
         required: true,
     },
+    reactions: [
+        {
+            user: {
+                type: mongoose_1.Schema.Types.ObjectId,
+                ref: "User",
+                required: true,
+            },
+            emoji: {
+                type: String,
+                required: true,
+            },
+        },
+    ],
 }, {
     timestamps: true,
 });

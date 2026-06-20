@@ -12,7 +12,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.isWorkspaceAdmin = void 0;
+exports.blockViewers = exports.isWorkspaceAdmin = void 0;
 const workspace_model_1 = __importDefault(require("../model/workspace.model"));
 const project_model_1 = __importDefault(require("../model/project.model"));
 const isWorkspaceAdmin = (req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
@@ -68,3 +68,69 @@ const isWorkspaceAdmin = (req, res, next) => __awaiter(void 0, void 0, void 0, f
     }
 });
 exports.isWorkspaceAdmin = isWorkspaceAdmin;
+const blockViewers = (req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const user = req.user;
+        if (!user) {
+            return res.status(401).json({ success: false, message: "Unauthorized" });
+        }
+        const userId = user._id.toString();
+        let { workspaceId, projectId, taskId, commentId } = req.params;
+        // Fallback to request body for creation routes
+        if (!projectId && req.body.project) {
+            projectId = req.body.project;
+        }
+        if (!workspaceId && req.body.workspace) {
+            workspaceId = req.body.workspace;
+        }
+        if (commentId) {
+            const Comment = require("../model/comment.model").default;
+            const comment = yield Comment.findById(commentId).populate("task");
+            if (comment && comment.task) {
+                taskId = comment.task._id.toString();
+            }
+        }
+        if (taskId) {
+            const Task = require("../model/task.model").default;
+            const task = yield Task.findById(taskId);
+            if (task) {
+                projectId = task.project.toString();
+            }
+        }
+        if (projectId) {
+            const Project = require("../model/project.model").default;
+            const project = yield Project.findById(projectId);
+            if (project) {
+                const projectMember = project.members.find((m) => m.user.toString() === userId);
+                if (projectMember && projectMember.role === "viewer") {
+                    return res.status(403).json({
+                        success: false,
+                        message: "Action forbidden: View-only role",
+                    });
+                }
+                workspaceId = project.workspace.toString();
+            }
+        }
+        if (workspaceId) {
+            const Workspace = require("../model/workspace.model").default;
+            const workspace = yield Workspace.findById(workspaceId);
+            if (workspace) {
+                const workspaceMember = workspace.members.find((m) => m.user.toString() === userId);
+                if (workspaceMember && workspaceMember.role === "viewer") {
+                    return res.status(403).json({
+                        success: false,
+                        message: "Action forbidden: View-only role in workspace",
+                    });
+                }
+            }
+        }
+        next();
+    }
+    catch (error) {
+        res.status(500).json({
+            success: false,
+            message: error.message || "Failed to check viewer permissions",
+        });
+    }
+});
+exports.blockViewers = blockViewers;

@@ -2,7 +2,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { createTask, updateTask, deleteTask, logTime, deleteTimeLog, bulkUpdateTasks } from "../api/task.api";
 
 // Base API URL detection
-const BASE_URL = process.env.EXPO_PUBLIC_API_URL || "http://192.168.1.7:5137";
+const BASE_URL = process.env.EXPO_PUBLIC_API_URL || "http://192.168.1.4:5137";
 
 export interface OfflineAction {
   id: string;

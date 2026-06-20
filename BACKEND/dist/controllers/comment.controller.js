@@ -9,7 +9,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
     });
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.deleteCommentController = exports.getTaskCommentsController = exports.createCommentController = void 0;
+exports.deleteCommentController = exports.toggleCommentReactionController = exports.updateCommentController = exports.getTaskCommentsController = exports.createCommentController = void 0;
 const comment_service_1 = require("../services/comment.service");
 const createCommentController = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
@@ -47,19 +47,60 @@ const getTaskCommentsController = (req, res) => __awaiter(void 0, void 0, void 0
     }
 });
 exports.getTaskCommentsController = getTaskCommentsController;
+const updateCommentController = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    var _a;
+    try {
+        const { content } = req.body;
+        const commentId = req.params.commentId;
+        const userId = req.user._id;
+        const comment = yield (0, comment_service_1.updateCommentService)(commentId, content, userId);
+        return res.status(200).json({
+            success: true,
+            comment,
+        });
+    }
+    catch (error) {
+        return res.status(((_a = error.message) === null || _a === void 0 ? void 0 : _a.includes("Unauthorized")) ? 403 : 500).json({
+            success: false,
+            message: error.message || "Failed to update comment",
+        });
+    }
+});
+exports.updateCommentController = updateCommentController;
+const toggleCommentReactionController = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const { emoji } = req.body;
+        const commentId = req.params.commentId;
+        const userId = req.user._id;
+        const comment = yield (0, comment_service_1.toggleCommentReactionService)(commentId, emoji, userId);
+        return res.status(200).json({
+            success: true,
+            comment,
+        });
+    }
+    catch (error) {
+        return res.status(500).json({
+            success: false,
+            message: error.message || "Failed to toggle reaction",
+        });
+    }
+});
+exports.toggleCommentReactionController = toggleCommentReactionController;
 const deleteCommentController = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    var _a;
     try {
         const commentId = req.params.commentId;
-        yield (0, comment_service_1.deleteCommentService)(commentId);
+        const userId = req.user._id;
+        yield (0, comment_service_1.deleteCommentService)(commentId, userId);
         return res.status(200).json({
             success: true,
             message: "Comment deleted",
         });
     }
     catch (error) {
-        return res.status(500).json({
+        return res.status(((_a = error.message) === null || _a === void 0 ? void 0 : _a.includes("Unauthorized")) ? 403 : 500).json({
             success: false,
-            message: "Failed to delete comment",
+            message: error.message || "Failed to delete comment",
         });
     }
 });

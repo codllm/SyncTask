@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
-import * as SecureStore from "expo-secure-store";
+import * as storage from "../utils/storage";
 import { getProfileApi } from "../api/user.api";
 import { getUserWorkspace, Workspace } from "../api/workspace.api";
 import { getWorkspaceProjects, Project } from "../api/project.api";
@@ -101,43 +101,43 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const C = isDarkMode ? darkTheme : lightTheme;
 
-  // Custom setters that persist to SecureStore if needed
+  // Custom setters that persist to storage if needed
   const setUser = async (u: any | null) => {
     setUserState(u);
     if (u) {
-      await SecureStore.setItemAsync("User", JSON.stringify(u));
+      await storage.setItemAsync("User", JSON.stringify(u));
     } else {
-      await SecureStore.deleteItemAsync("User");
+      await storage.deleteItemAsync("User");
     }
   };
 
   const setToken = async (t: string | null) => {
     setTokenState(t);
     if (t) {
-      await SecureStore.setItemAsync("token", t);
+      await storage.setItemAsync("token", t);
     } else {
-      await SecureStore.deleteItemAsync("token");
+      await storage.deleteItemAsync("token");
     }
   };
 
   const setThemeColor = async (color: string) => {
     setThemeColorState(color);
-    await SecureStore.setItemAsync("themeColor", color);
+    await storage.setItemAsync("themeColor", color);
   };
 
   const setIsDarkMode = async (val: boolean) => {
     setIsDarkModeState(val);
-    await SecureStore.setItemAsync("isDarkMode", val ? "true" : "false");
+    await storage.setItemAsync("isDarkMode", val ? "true" : "false");
   };
 
   // Initial load
   useEffect(() => {
     (async () => {
       try {
-        const storedToken = await SecureStore.getItemAsync("token");
-        const storedUser = await SecureStore.getItemAsync("User");
-        const storedTheme = await SecureStore.getItemAsync("themeColor");
-        const storedDarkMode = await SecureStore.getItemAsync("isDarkMode");
+        const storedToken = await storage.getItemAsync("token");
+        const storedUser = await storage.getItemAsync("User");
+        const storedTheme = await storage.getItemAsync("themeColor");
+        const storedDarkMode = await storage.getItemAsync("isDarkMode");
         
         if (storedDarkMode) {
           setIsDarkModeState(storedDarkMode === "true");
@@ -278,7 +278,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const selectWorkspace = async (workspace: Workspace | null) => {
     setActiveWorkspaceState(workspace);
     setActiveProject(null);
-    const storedTheme = await SecureStore.getItemAsync("themeColor");
+    const storedTheme = await storage.getItemAsync("themeColor");
     setThemeColorState(storedTheme || "#5865F2");
     if (workspace) {
       await refreshProjects(workspace._id);
@@ -292,7 +292,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (project && project.color) {
       setThemeColorState(project.color);
     } else {
-      SecureStore.getItemAsync("themeColor").then((storedTheme) => {
+      storage.getItemAsync("themeColor").then((storedTheme) => {
         setThemeColorState(storedTheme || "#5865F2");
       });
     }
@@ -301,8 +301,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const logout = async () => {
     try {
       // Clear storage
-      await SecureStore.deleteItemAsync("token");
-      await SecureStore.deleteItemAsync("User");
+      await storage.deleteItemAsync("token");
+      await storage.deleteItemAsync("User");
     } catch (err) {
       console.error("AppContext: logout storage cleanup error:", err);
     } finally {

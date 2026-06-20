@@ -1,8 +1,8 @@
 import axios from "axios";
-import * as SecureStore from "expo-secure-store";
+import * as storage from "../utils/storage";
 
 // ─── Base URL ────────────────────────────────────────────────────────────────
-const BASE_URL = process.env.EXPO_PUBLIC_API_URL || "http://192.168.1.7:5137";
+const BASE_URL = process.env.EXPO_PUBLIC_API_URL || "http://192.168.1.4:5137";
 
 const api = axios.create({
   baseURL: BASE_URL,
@@ -10,9 +10,9 @@ const api = axios.create({
   headers: { "Content-Type": "application/json" },
 });
 
-// Attach token from SecureStore to every request
+// Attach token from storage to every request
 api.interceptors.request.use(async (config) => {
-  const token = await SecureStore.getItemAsync("token");
+  const token = await storage.getItemAsync("token");
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
@@ -102,7 +102,7 @@ export const updateProfileApi = async (payload: UpdateProfilePayload) => {
 
 export const logoutApi = async () => {
   const res = await api.post("/api/users/logout");
-  await SecureStore.deleteItemAsync("token");
+  await storage.deleteItemAsync("token");
   return { success: true, ...res.data };
 };
 
@@ -160,6 +160,37 @@ export const getSavedFiltersApi = async (projectId: string): Promise<{ success: 
 export const deleteSavedFilterApi = async (filterId: string): Promise<{ success: boolean; message: string }> => {
   const res = await api.delete(`/api/users/saved-filters/${filterId}`);
   return res.data;
+};
+
+export interface OAuthGooglePayload {
+  idToken?: string;
+  profile?: {
+    email: string;
+    firstname: string;
+    lastname: string;
+    googleId: string;
+    avatarUrl?: string;
+  };
+}
+
+export interface OAuthApplePayload {
+  identityToken?: string;
+  profile?: {
+    email: string;
+    firstname: string;
+    lastname: string;
+    appleId: string;
+  };
+}
+
+export const loginGoogleApi = async (payload: OAuthGooglePayload) => {
+  const res = await api.post("/api/users/oauth/google", payload);
+  return { success: true, ...res.data };
+};
+
+export const loginAppleApi = async (payload: OAuthApplePayload) => {
+  const res = await api.post("/api/users/oauth/apple", payload);
+  return { success: true, ...res.data };
 };
 
 export default api;

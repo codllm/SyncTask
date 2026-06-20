@@ -88,8 +88,8 @@ const C = {
   border: "#262A33",
   borderLight: "#343944",
   textPrimary: "#FFFFFF",
-  textSecondary: "#9CA3AF",
-  textMuted: "#6B7280",
+  textSecondary: "#F3F4F6",
+  textMuted: "#E5E7EB",
 
   accent: "#5B8DEF",
   onAccent: "#0B0C10",
@@ -430,7 +430,7 @@ const SwipeableKanbanBoard = ({
   };
 
   return (
-    <View style={s.flex}>
+    <View style={s.flex} >
       {/* Tab row: switch columns directly, shows live counts */}
       <View style={s.columnTabRow}>
         {columns.map((col, idx) => {
@@ -794,9 +794,12 @@ export default function TasksScreen() {
   });
 
   const estHours = selectedTask?.estimatedHours || 0;
+  const [memberSearchQuery, setMemberSearchQuery] = useState("");
   const [isEditingDesc, setIsEditingDesc] = useState(false);
   const [editDescText, setEditDescText] = useState("");
   const [previewAttachment, setPreviewAttachment] = useState<{ name: string; url: string; fileType: string } | null>(null);
+  const [pendingAttachment, setPendingAttachment] = useState<{ uri: string; name: string; mimeType: string } | null>(null);
+  const [attachmentDescription, setAttachmentDescription] = useState("");
   const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
   const [editCommentText, setEditCommentText] = useState("");
 
@@ -1937,7 +1940,12 @@ export default function TasksScreen() {
       const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], allowsEditing: false, quality: 0.8 });
       if (!result.canceled && result.assets?.[0]) {
         const a = result.assets[0];
-        await handleUpload(a.uri, a.fileName || `photo_${Date.now()}.jpg`, "image/jpeg");
+        setPendingAttachment({
+          uri: a.uri,
+          name: a.fileName || `photo_${Date.now()}.jpg`,
+          mimeType: "image/jpeg",
+        });
+        setAttachmentDescription("");
       }
     } catch (err) {
       console.error("Image pick error:", err);
@@ -1949,14 +1957,19 @@ export default function TasksScreen() {
       const result = await DocumentPicker.getDocumentAsync({ type: ["application/pdf", "image/*"], copyToCacheDirectory: true });
       if (!result.canceled && result.assets?.[0]) {
         const a = result.assets[0];
-        await handleUpload(a.uri, a.name || "document.pdf", a.mimeType || "application/octet-stream");
+        setPendingAttachment({
+          uri: a.uri,
+          name: a.name || "document.pdf",
+          mimeType: a.mimeType || "application/octet-stream",
+        });
+        setAttachmentDescription("");
       }
     } catch (err) {
       console.error("Document pick error:", err);
     }
   };
 
-  const handleUpload = async (uri: string, name: string, mimeType: string) => {
+  const handleUpload = async (uri: string, name: string, mimeType: string, desc?: string) => {
     if (!selectedTask) return;
     setUploading(true);
     try {
@@ -1965,11 +1978,19 @@ export default function TasksScreen() {
       const res = await uploadFile(formData);
       if (res.success) {
         const updateRes = await updateTask(selectedTask._id, {
-          newAttachments: [{ name: res.name || name, url: res.url, fileType: res.fileType || mimeType, uploadedBy: user?._id }],
+          newAttachments: [{
+            name: res.name || name,
+            url: res.url,
+            fileType: res.fileType || mimeType,
+            uploadedBy: user?._id,
+            description: desc?.trim() || undefined,
+          }],
         });
         if (updateRes.success) {
           setSelectedTask(updateRes.task);
           setTasks((prev) => prev.map((t) => (t._id === updateRes.task._id ? updateRes.task : t)));
+          setPendingAttachment(null);
+          setAttachmentDescription("");
         } else {
           Alert.alert("Error", "Failed to attach file to task.");
         }
@@ -1993,6 +2014,8 @@ export default function TasksScreen() {
   const openAttachmentsView = (task: Task) => {
     console.log("[DEBUG] openAttachmentsView called with:", task?._id, task?.title);
     setSelectedTask(task);
+    setPendingAttachment(null);
+    setAttachmentDescription("");
     setAttachmentsModalVisible(true);
   };
 
@@ -2002,6 +2025,7 @@ export default function TasksScreen() {
     setSelectedTask(task);
     setEditDescText(task.description || "");
     setIsEditingDesc(false);
+    setMemberSearchQuery("");
     setDetailModalVisible(true);
 
     try {
@@ -3260,27 +3284,58 @@ export default function TasksScreen() {
                 {/* Add project members */}
                 {!isViewer && activeProject.members?.length > 0 && (() => {
                   const currentIds = (selectedTask.assignedTo as any[]).map(getMemberId);
-                  const available = activeProject.members.filter((pm: any) => !currentIds.includes(getMemberId(pm.user)));
-                  if (!available.length) return null;
+                  const allAvailable = activeProject.members.filter((pm: any) => !currentIds.includes(getMemberId(pm.user)));
+                  if (allAvailable.length === 0) return null;
+
+                  let available = [...allAvailable];
+                  if (memberSearchQuery.trim()) {
+                    const q = memberSearchQuery.toLowerCase();
+                    available = available.filter((pm: any) => {
+                      const name = getFullName(pm.user).toLowerCase();
+                      const email = (pm.user?.email || "").toLowerCase();
+                      return name.includes(q) || email.includes(q);
+                    });
+                  }
+
                   return (
                     <>
                       <Text style={[s.sectionLabel, { marginBottom: 8 }]}>Add members</Text>
-                      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 20 }}>
-                        {available.map((pm: any, idx: number) => {
-                          const pmId = getMemberId(pm.user);
-                          const name = getFullName(pm.user);
-                          const initials = getInitials(pm.user);
-                          return (
-                            <TouchableOpacity key={pmId || idx} onPress={() => handleAddTaskMember(pmId)} style={s.addMemberChip}>
-                              <View style={s.addMemberAvatar}>
-                                <Text style={s.addMemberAvatarText}>{initials}</Text>
-                              </View>
-                              <Text style={s.addMemberName}>{name}</Text>
-                              <Ionicons name="add" size={13} color={C.accent} />
-                            </TouchableOpacity>
-                          );
-                        })}
-                      </ScrollView>
+                      <View style={[s.inputWrap, { flexDirection: "row", alignItems: "center", marginBottom: 12, height: 40 }]}>
+                        <Ionicons name="search-outline" size={15} color={C.textMuted} style={{ marginRight: 6 }} />
+                        <TextInput
+                          style={[s.input, { flex: 1, paddingVertical: 4 }]}
+                          placeholder="Search members to add..."
+                          placeholderTextColor={C.textMuted}
+                          value={memberSearchQuery}
+                          onChangeText={setMemberSearchQuery}
+                        />
+                        {memberSearchQuery ? (
+                          <TouchableOpacity onPress={() => setMemberSearchQuery("")}>
+                            <Ionicons name="close-circle" size={15} color={C.textMuted} />
+                          </TouchableOpacity>
+                        ) : null}
+                      </View>
+
+                      {available.length > 0 ? (
+                        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 20 }}>
+                          {available.map((pm: any, idx: number) => {
+                            const pmId = getMemberId(pm.user);
+                            const name = getFullName(pm.user);
+                            const initials = getInitials(pm.user);
+                            return (
+                              <TouchableOpacity key={pmId || idx} onPress={() => handleAddTaskMember(pmId)} style={s.addMemberChip}>
+                                <View style={s.addMemberAvatar}>
+                                  <Text style={s.addMemberAvatarText}>{initials}</Text>
+                                </View>
+                                <Text style={s.addMemberName}>{name}</Text>
+                                <Ionicons name="add" size={13} color={C.accent} />
+                              </TouchableOpacity>
+                            );
+                          })}
+                        </ScrollView>
+                      ) : (
+                        <Text style={[s.bodyMuted, { fontStyle: "italic", marginBottom: 20 }]}>No members match your search.</Text>
+                      )}
                     </>
                   );
                 })()}
@@ -3472,6 +3527,73 @@ export default function TasksScreen() {
                     </TouchableOpacity>
                   </View>
                 )}
+
+                {/* Attachments Section */}
+                <SectionLabel>Attachments</SectionLabel>
+                <View style={{ marginBottom: 16 }}>
+                  {selectedTask.attachments && selectedTask.attachments.length > 0 ? (
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingVertical: 4 }}>
+                      {selectedTask.attachments.map((att, idx) => {
+                        const isImage = att.fileType?.startsWith("image/") || /\.(jpg|jpeg|png|gif)$/i.test(att.name);
+                        return (
+                          <TouchableOpacity
+                            key={idx}
+                            onPress={() => att.url && setPreviewAttachment(att)}
+                            style={{
+                              flexDirection: "row",
+                              alignItems: "center",
+                              backgroundColor: C.card,
+                              borderRadius: 12,
+                              paddingVertical: 8,
+                              paddingHorizontal: 12,
+                              marginRight: 8,
+                              borderWidth: 1,
+                              borderColor: C.border,
+                            }}
+                          >
+                            <Ionicons name={isImage ? "image-outline" : "document-text-outline"} size={16} color={C.accent} style={{ marginRight: 6 }} />
+                            <Text style={{ color: C.textPrimary, fontSize: 13, maxWidth: 120 }} numberOfLines={1}>
+                              {att.name}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </ScrollView>
+                  ) : (
+                    <Text style={[s.bodyMuted, { fontStyle: "italic", fontSize: 12, marginBottom: 4 }]}>No attachments uploaded.</Text>
+                  )}
+                  {!isViewer && (
+                    <TouchableOpacity
+                      onPress={() => openAttachmentsView(selectedTask)}
+                      style={[s.inlineBtnGhost, { marginTop: 8, alignSelf: "flex-start", paddingVertical: 6, paddingHorizontal: 12, borderRadius: 8, borderWidth: 1, borderColor: C.border }]}
+                    >
+                      <Text style={[s.inlineBtnGhostText, { fontSize: 12 }]}>+ Add / Manage Attachments</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+
+                {/* Comments Section */}
+                <SectionLabel>Comments</SectionLabel>
+                <View style={{ marginBottom: 20 }}>
+                  <TouchableOpacity
+                    onPress={() => {
+                      setCommentsModalVisible(true);
+                    }}
+                    style={[
+                      s.secondaryBtn,
+                      {
+                        flexDirection: "row",
+                        justifyContent: "center",
+                        alignItems: "center",
+                        gap: 8,
+                        height: 44,
+                      },
+                    ]}
+                  >
+                    <Ionicons name="chatbubbles-outline" size={18} color={C.textPrimary} />
+                    <Text style={s.secondaryBtnText}>View & Post Comments</Text>
+                  </TouchableOpacity>
+                </View>
 
                 {/* Recurring Task Settings */}
                 <SectionLabel>Recurring settings</SectionLabel>

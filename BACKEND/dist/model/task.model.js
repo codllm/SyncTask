@@ -46,7 +46,6 @@ const taskSchema = new mongoose_1.Schema({
     },
     status: {
         type: String,
-        enum: ["todo", "in-progress", "completed"],
         default: "todo",
     },
     priority: {
@@ -56,6 +55,10 @@ const taskSchema = new mongoose_1.Schema({
     },
     dueDate: {
         type: Date,
+    },
+    startDate: {
+        type: Date,
+        default: Date.now,
     },
     project: {
         type: mongoose_1.Schema.Types.ObjectId,
@@ -91,6 +94,7 @@ const taskSchema = new mongoose_1.Schema({
             publicId: { type: String }, // Cloudinary public_id
             fileType: { type: String, required: true },
             uploadedBy: { type: mongoose_1.Schema.Types.ObjectId, ref: "User", required: true },
+            description: { type: String },
             createdAt: { type: Date, default: Date.now },
         },
     ],
@@ -112,6 +116,56 @@ const taskSchema = new mongoose_1.Schema({
     sprint: {
         type: mongoose_1.Schema.Types.ObjectId,
         ref: "Sprint",
+    },
+    milestone: {
+        type: mongoose_1.Schema.Types.ObjectId,
+        ref: "Milestone",
+    },
+    position: {
+        type: Number,
+        default: 0,
+    },
+    isArchived: {
+        type: Boolean,
+        default: false,
+    },
+    reminderSent: {
+        type: Boolean,
+        default: false,
+    },
+    estimatedHours: {
+        type: Number,
+        default: 0,
+    },
+    actualHours: {
+        type: Number,
+        default: 0,
+    },
+    timeLogs: [
+        {
+            loggedBy: { type: mongoose_1.Schema.Types.ObjectId, ref: "User", required: true },
+            hours: { type: Number, required: true },
+            description: { type: String, trim: true },
+            date: { type: Date, default: Date.now },
+            createdAt: { type: Date, default: Date.now },
+        },
+    ],
+    isDeleted: {
+        type: Boolean,
+        default: false,
+        index: true,
+    },
+    deletedAt: {
+        type: Date,
+    },
+    customFields: {
+        type: [
+            {
+                name: { type: String, required: true },
+                value: { type: mongoose_1.Schema.Types.Mixed, default: "" }
+            }
+        ],
+        default: []
     },
 }, {
     timestamps: true,

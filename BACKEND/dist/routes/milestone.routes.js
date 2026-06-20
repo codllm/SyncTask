@@ -1,0 +1,11 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const milestone_controller_1 = require("../controllers/milestone.controller");
+const auth_middleware_1 = require("../middleware/auth.middleware");
+const router = (0, express_1.Router)();
+router.post("/", auth_middleware_1.userauth, milestone_controller_1.createMilestone);
+router.get("/project/:projectId", auth_middleware_1.userauth, milestone_controller_1.getProjectMilestones);
+router.put("/:milestoneId", auth_middleware_1.userauth, milestone_controller_1.updateMilestone);
+router.delete("/:milestoneId", auth_middleware_1.userauth, milestone_controller_1.deleteMilestone);
+exports.default = router;

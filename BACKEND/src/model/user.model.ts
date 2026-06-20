@@ -16,9 +16,11 @@ export interface IUser extends Document, IUserMethods {
     lastname: string;
   }
   email: string;
-  password: string;
+  password?: string;
   age?: number;
-  gender:string,
+  gender?: string;
+  googleId?: string;
+  appleId?: string;
   createdAt: Date;
   updatedAt: Date;
   usertype: string;
@@ -69,7 +71,7 @@ const UserSchema = new Schema<IUser, {}, IUserMethods>({
   },
   password: {
     type: String,
-    required: true,
+    required: false,
     minlength: 3,
   },
   age: {
@@ -78,12 +80,24 @@ const UserSchema = new Schema<IUser, {}, IUserMethods>({
   },
   gender:{
     type: String,
-    required: true,
+    required: false,
+    default: "not_specified",
   },
   usertype:{
     type: String,
     required: true,
-    enum:["individual","team","admin"]
+    enum:["individual","team","admin"],
+    default: "individual",
+  },
+  googleId: {
+    type: String,
+    unique: true,
+    sparse: true,
+  },
+  appleId: {
+    type: String,
+    unique: true,
+    sparse: true,
   },
   phone:{
     type: Number,
@@ -135,6 +149,7 @@ UserSchema.methods.hashPassword = async function (password: string): Promise<str
 };
 
 UserSchema.methods.comparePassword = async function (password: string): Promise<boolean> {
+  if (!this.password) return false;
   return await bcrypt.compare(password, this.password);
 };
 

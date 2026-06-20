@@ -11,7 +11,6 @@ import {
 } from "react-native";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { LinearGradient } from "expo-linear-gradient";
 import { registerApi } from "../../api/user.api";
 import { useApp } from "../../context/AppContext";
 
@@ -26,31 +25,30 @@ const GENDERS = [
   { value: "other", label: "Other" },
 ];
 
-// Keep these tokens identical to login.jsx so both screens read as one flow.
-// Ice blue two-tone palette: the whole screen is the gradient, the card
-// floats on top as frosted glass rather than a flat white panel.
-const COLORS = {
-  gradientFrom: "#BEE3F8",
-  gradientVia: "#6FB6E0",
-  gradientTo: "#2E7FB8",
-  cardGlass: "rgba(255,255,255,0.16)",
-  cardBorder: "rgba(255,255,255,0.35)",
-  input: "rgba(255,255,255,0.92)",
-  inputBorder: "rgba(255,255,255,0.6)",
-  inputFocused: "#FFFFFF",
-  textOnGlassPrimary: "#FFFFFF",
-  textOnGlassSecondary: "#EAF6FD",
-  textInInput: "#16313D",
-  placeholder: "#9CB9C7",
-  iconMuted: "#6FA8CC",
-  divider: "rgba(255,255,255,0.35)",
-  accentText: "#2E7FB8",
-  dangerBg: "rgba(255,255,255,0.18)",
-  dangerBorder: "rgba(255,255,255,0.4)",
-  white: "#FFFFFF",
-  segmentActiveBg: "#FFFFFF",
-  segmentInactiveBg: "rgba(255,255,255,0.22)",
-  segmentInactiveBorder: "rgba(255,255,255,0.4)",
+// ─── Theme (matches Home / Tasks / Notifications / Profile / Login screens) ──
+const T = {
+  bg:                    "#15171C",
+  surface:               "#1D2027",
+  card:                  "#22252E",
+  border:                "#2A2D38",
+  borderLight:           "#333748",
+  input:                 "#1D2027",
+  inputBorder:           "#2A2D38",
+  inputFocused:          "#5865F2",
+  textPrimary:           "#E2E4EA",
+  textSecondary:         "#ffff",
+  textMuted:              "#ffff",
+  placeholder:           "#4B5060",
+  iconMuted:             "#6B7280",
+  accent:                "#5865F2",
+  accentBg:              "rgba(88,101,242,0.12)",
+  accentText:            "#A5AEFF",
+  danger:                "#F04747",
+  dangerBg:              "rgba(240,71,71,0.10)",
+  dangerBorder:          "rgba(240,71,71,0.25)",
+  segmentActiveBg:       "#5865F2",
+  segmentInactiveBg:     "#1D2027",
+  segmentInactiveBorder: "#2A2D38",
 };
 
 export default function RegisterScreen() {
@@ -114,30 +112,30 @@ export default function RegisterScreen() {
   };
 
   const inputBorderColor = (field) =>
-    focusedField === field ? COLORS.inputFocused : "transparent";
+    focusedField === field ? T.inputFocused : T.inputBorder;
 
   const renderInput = ({ field, label, icon, placeholder, keyboardType, secure, autoCapitalize = "sentences" }) => (
     <View style={{ marginBottom: 16 }}>
-      <Text style={{ color: COLORS.textOnGlassSecondary, fontSize: 12, fontWeight: "600", letterSpacing: 0.4, marginBottom: 8, textTransform: "uppercase" }}>
+      <Text style={{ color: T.textMuted, fontSize: 11, fontWeight: "600", letterSpacing: 0.6, marginBottom: 8, textTransform: "uppercase" }}>
         {label}
       </Text>
       <View
         style={{
           flexDirection: "row",
           alignItems: "center",
-          backgroundColor: COLORS.input,
-          borderWidth: 1.5,
+          backgroundColor: T.input,
+          borderWidth: 1,
           borderColor: inputBorderColor(field),
-          borderRadius: 16,
+          borderRadius: 14,
           paddingHorizontal: 14,
           gap: 10,
         }}
       >
-        <Ionicons name={icon} size={18} color={COLORS.iconMuted} />
+        <Ionicons name={icon} size={17} color={T.iconMuted} />
         <TextInput
-          style={{ flex: 1, color: COLORS.textInInput, paddingVertical: 14, fontSize: 15 }}
+          style={{ flex: 1, color: T.textPrimary, paddingVertical: 14, fontSize: 15 }}
           placeholder={placeholder}
-          placeholderTextColor={COLORS.placeholder}
+          placeholderTextColor={T.placeholder}
           value={form[field]}
           onChangeText={(v) => update(field, v)}
           onFocus={() => setFocusedField(field)}
@@ -149,7 +147,7 @@ export default function RegisterScreen() {
         />
         {secure && (
           <TouchableOpacity onPress={() => setShowPassword(!showPassword)} hitSlop={8}>
-            <Ionicons name={showPassword ? "eye-off-outline" : "eye-outline"} size={18} color={COLORS.accentText} />
+            <Ionicons name={showPassword ? "eye-off-outline" : "eye-outline"} size={17} color={T.accent} />
           </TouchableOpacity>
         )}
       </View>
@@ -168,18 +166,18 @@ export default function RegisterScreen() {
             style={{
               flex: 1,
               paddingVertical: 11,
-              borderRadius: 13,
+              borderRadius: 12,
               alignItems: "center",
-              backgroundColor: active ? COLORS.segmentActiveBg : COLORS.segmentInactiveBg,
-              borderWidth: 1.5,
-              borderColor: active ? COLORS.segmentActiveBg : COLORS.segmentInactiveBorder,
+              backgroundColor: active ? T.segmentActiveBg : T.segmentInactiveBg,
+              borderWidth: 1,
+              borderColor: active ? T.segmentActiveBg : T.segmentInactiveBorder,
             }}
           >
             <Text
               style={{
                 fontSize: 13,
                 fontWeight: "600",
-                color: active ? COLORS.accentText : COLORS.white,
+                color: active ? "#fff" : T.textSecondary,
               }}
             >
               {opt.label}
@@ -191,12 +189,7 @@ export default function RegisterScreen() {
   );
 
   return (
-    <LinearGradient
-      colors={[COLORS.gradientFrom, COLORS.gradientVia, COLORS.gradientTo]}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 1, y: 1 }}
-      style={{ flex: 1 }}
-    >
+    <View style={{ flex: 1, backgroundColor: T.bg }}>
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === "ios" ? "padding" : "height"}
@@ -212,8 +205,8 @@ export default function RegisterScreen() {
               style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 18 }}
               hitSlop={8}
             >
-              <Ionicons name="arrow-back" size={16} color={COLORS.white} />
-              <Text style={{ color: COLORS.white, fontSize: 14, fontWeight: "600" }}>Back</Text>
+              <Ionicons name="arrow-back" size={16} color={T.textSecondary} />
+              <Text style={{ color: T.textSecondary, fontSize: 14, fontWeight: "600" }}>Back</Text>
             </TouchableOpacity>
 
             <View
@@ -221,33 +214,30 @@ export default function RegisterScreen() {
                 width: 52,
                 height: 52,
                 borderRadius: 16,
-                backgroundColor: COLORS.white,
+                backgroundColor: T.accentBg,
+                borderWidth: 0.5,
+                borderColor: T.accent + "40",
                 alignItems: "center",
                 justifyContent: "center",
-                shadowColor: "#0C3C5A",
-                shadowOpacity: 0.25,
-                shadowRadius: 14,
-                shadowOffset: { width: 0, height: 8 },
-                elevation: 6,
               }}
             >
-              <Ionicons name="flash" size={26} color={COLORS.accentText} />
+              <Ionicons name="flash" size={26} color={T.accent} />
             </View>
 
-            <Text style={{ color: COLORS.textOnGlassPrimary, fontSize: 28, fontWeight: "700", marginTop: 18, letterSpacing: -0.5 }}>
+            <Text style={{ color: T.textPrimary, fontSize: 26, fontWeight: "600", marginTop: 18, letterSpacing: -0.5 }}>
               Create account
             </Text>
-            <Text style={{ color: COLORS.textOnGlassSecondary, fontSize: 15, marginTop: 6, marginBottom: 28 }}>
-              Join TaskFlow and manage work smarter
+            <Text style={{ color: T.textSecondary, fontSize: 14, marginTop: 6, marginBottom: 28 }}>
+              Join SyncTask and manage work smarter
             </Text>
 
             <View
               style={{
-                backgroundColor: COLORS.cardGlass,
-                borderRadius: 24,
-                borderWidth: 1,
-                borderColor: COLORS.cardBorder,
-                padding: 22,
+                backgroundColor: T.surface,
+                borderRadius: 22,
+                borderWidth: 0.5,
+                borderColor: T.border,
+                padding: 20,
               }}
             >
               {/* Name row */}
@@ -287,14 +277,14 @@ export default function RegisterScreen() {
               })}
 
               <View style={{ marginBottom: 16 }}>
-                <Text style={{ color: COLORS.textOnGlassSecondary, fontSize: 12, fontWeight: "600", letterSpacing: 0.4, marginBottom: 8, textTransform: "uppercase" }}>
+                <Text style={{ color: T.textMuted, fontSize: 11, fontWeight: "600", letterSpacing: 0.6, marginBottom: 8, textTransform: "uppercase" }}>
                   Gender
                 </Text>
                 {renderSegmented(GENDERS, "gender")}
               </View>
 
               <View style={{ marginBottom: 20 }}>
-                <Text style={{ color: COLORS.textOnGlassSecondary, fontSize: 12, fontWeight: "600", letterSpacing: 0.4, marginBottom: 8, textTransform: "uppercase" }}>
+                <Text style={{ color: T.textMuted, fontSize: 11, fontWeight: "600", letterSpacing: 0.6, marginBottom: 8, textTransform: "uppercase" }}>
                   Account type
                 </Text>
                 {renderSegmented(USER_TYPES, "usertype")}
@@ -303,10 +293,10 @@ export default function RegisterScreen() {
               {error ? (
                 <View
                   style={{
-                    backgroundColor: COLORS.dangerBg,
-                    borderWidth: 1,
-                    borderColor: COLORS.dangerBorder,
-                    borderRadius: 14,
+                    backgroundColor: T.dangerBg,
+                    borderWidth: 0.5,
+                    borderColor: T.dangerBorder,
+                    borderRadius: 12,
                     padding: 12,
                     marginBottom: 16,
                     flexDirection: "row",
@@ -314,8 +304,8 @@ export default function RegisterScreen() {
                     gap: 8,
                   }}
                 >
-                  <Ionicons name="alert-circle-outline" size={16} color={COLORS.white} />
-                  <Text style={{ color: COLORS.white, fontSize: 13, flex: 1 }}>{error}</Text>
+                  <Ionicons name="alert-circle-outline" size={15} color={T.danger} />
+                  <Text style={{ color: T.danger, fontSize: 13, flex: 1 }}>{error}</Text>
                 </View>
               ) : null}
 
@@ -324,21 +314,16 @@ export default function RegisterScreen() {
                 disabled={loading}
                 activeOpacity={0.85}
                 style={{
-                  backgroundColor: COLORS.white,
-                  borderRadius: 16,
-                  paddingVertical: 16,
+                  backgroundColor: T.accent,
+                  borderRadius: 14,
+                  paddingVertical: 15,
                   alignItems: "center",
-                  shadowColor: "#0C3C5A",
-                  shadowOpacity: 0.25,
-                  shadowRadius: 14,
-                  shadowOffset: { width: 0, height: 6 },
-                  elevation: 4,
                 }}
               >
                 {loading ? (
-                  <ActivityIndicator color={COLORS.accentText} />
+                  <ActivityIndicator color="#fff" />
                 ) : (
-                  <Text style={{ color: COLORS.accentText, fontWeight: "700", fontSize: 15, letterSpacing: 0.3 }}>
+                  <Text style={{ color: "#fff", fontWeight: "600", fontSize: 15, letterSpacing: 0.3 }}>
                     Create account
                   </Text>
                 )}
@@ -346,11 +331,11 @@ export default function RegisterScreen() {
             </View>
 
             <View style={{ flexDirection: "row", justifyContent: "center", marginTop: 26 }}>
-              <Text style={{ color: COLORS.textOnGlassSecondary, fontSize: 14 }}>
+              <Text style={{ color: T.textMuted, fontSize: 14 }}>
                 Already have an account?{" "}
               </Text>
               <TouchableOpacity onPress={() => router.push("/(auth)/login")}>
-                <Text style={{ color: COLORS.white, fontWeight: "700", fontSize: 14 }}>
+                <Text style={{ color: T.accentText, fontWeight: "700", fontSize: 14 }}>
                   Sign in
                 </Text>
               </TouchableOpacity>
@@ -358,6 +343,6 @@ export default function RegisterScreen() {
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
-    </LinearGradient>
+    </View>
   );
 }

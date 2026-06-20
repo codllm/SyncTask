@@ -48,6 +48,9 @@ const projectSchema = new mongoose_1.Schema({
         type: String,
         default: "#6C63FF",
     },
+    coverImageUrl: {
+        type: String,
+    },
     workspace: {
         type: mongoose_1.Schema.Types.ObjectId,
         ref: "Workspace",
@@ -62,7 +65,7 @@ const projectSchema = new mongoose_1.Schema({
             },
             role: {
                 type: String,
-                enum: ["admin", "member"],
+                enum: ["admin", "member", "viewer"],
                 default: "member",
             },
         },
@@ -78,6 +81,38 @@ const projectSchema = new mongoose_1.Schema({
         default: "ACTIVE",
     },
     deadline: {
+        type: Date,
+    },
+    columns: {
+        type: [
+            {
+                id: { type: String, required: true },
+                label: { type: String, required: true },
+                color: { type: String, default: "#6C63FF" }
+            }
+        ],
+        default: [
+            { id: "todo", label: "To Do", color: "#A8ACB9" },
+            { id: "in-progress", label: "In Progress", color: "#EF9F27" },
+            { id: "completed", label: "Completed", color: "#5DCAA5" }
+        ]
+    },
+    customFields: {
+        type: [
+            {
+                name: { type: String, required: true },
+                type: { type: String, enum: ["text", "number", "date", "boolean"], default: "text" },
+                required: { type: Boolean, default: false }
+            }
+        ],
+        default: []
+    },
+    isDeleted: {
+        type: Boolean,
+        default: false,
+        index: true,
+    },
+    deletedAt: {
         type: Date,
     },
 }, {

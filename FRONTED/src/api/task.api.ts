@@ -11,6 +11,7 @@ export interface Attachment {
   url: string;
   fileType: string;
   uploadedBy?: string;
+  description?: string;
   createdAt?: string;
 }
 

@@ -76,7 +76,7 @@ const UserSchema = new mongoose_1.Schema({
     },
     age: {
         type: Number,
-        required: true,
+        required: false,
     },
     gender: {
         type: String,
@@ -90,7 +90,43 @@ const UserSchema = new mongoose_1.Schema({
     phone: {
         type: Number,
         required: false,
-    }
+    },
+    notificationPreferences: {
+        comments: { type: Boolean, default: true },
+        assignments: { type: Boolean, default: true },
+        mentions: { type: Boolean, default: true },
+        reminders: { type: Boolean, default: true },
+    },
+    pinnedProjects: [
+        {
+            type: mongoose_1.Schema.Types.ObjectId,
+            ref: "Project",
+        },
+    ],
+    pinnedTasks: [
+        {
+            type: mongoose_1.Schema.Types.ObjectId,
+            ref: "Task",
+        },
+    ],
+    avatarUrl: {
+        type: String,
+        default: "",
+    },
+    savedFilters: [
+        {
+            name: { type: String, required: true },
+            project: { type: mongoose_1.Schema.Types.ObjectId, ref: "Project", required: true },
+            query: {
+                assignee: { type: String, default: null },
+                priority: { type: String, default: null },
+                dueDate: { type: String, default: null },
+                label: { type: String, default: null },
+                sortBy: { type: String, default: "position" },
+                sortOrder: { type: String, default: "asc" },
+            },
+        },
+    ],
 }, {
     timestamps: true,
 });

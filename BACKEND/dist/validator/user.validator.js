@@ -19,7 +19,8 @@ exports.registerUserSchema = zod_1.z.object({
         .min(3),
     age: zod_1.z
         .number()
-        .min(1),
+        .min(1)
+        .optional(),
     gender: zod_1.z.enum([
         "male",
         "female",
@@ -32,7 +33,7 @@ exports.registerUserSchema = zod_1.z.object({
     ]),
     phone: zod_1.z
         .string()
-        .optional(),
+        .min(3),
 });
 exports.loginUserSchema = zod_1.z.object({
     email: zod_1.z

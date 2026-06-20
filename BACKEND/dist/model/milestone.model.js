@@ -34,38 +34,36 @@ var __importStar = (this && this.__importStar) || (function () {
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
 const mongoose_1 = __importStar(require("mongoose"));
-const workspaceSchema = new mongoose_1.Schema({
-    name: {
+const milestoneSchema = new mongoose_1.Schema({
+    title: {
         type: String,
         required: true,
-        minlength: 3,
+        trim: true,
     },
     description: {
         type: String,
+        default: "",
     },
-    owner: {
+    project: {
         type: mongoose_1.Schema.Types.ObjectId,
-        ref: "User",
+        ref: "Project",
         required: true,
     },
-    logoUrl: {
-        type: String,
+    dueDate: {
+        type: Date,
     },
-    members: [
+    status: {
+        type: String,
+        enum: ["active", "completed"],
+        default: "active",
+    },
+    tasks: [
         {
-            user: {
-                type: mongoose_1.Schema.Types.ObjectId,
-                ref: "User",
-                required: true,
-            },
-            role: {
-                type: String,
-                enum: ["owner", "admin", "member", "viewer"],
-                default: "member",
-            },
+            type: mongoose_1.Schema.Types.ObjectId,
+            ref: "Task",
         },
     ],
 }, {
     timestamps: true,
 });
-exports.default = mongoose_1.default.model("Workspace", workspaceSchema);
+exports.default = mongoose_1.default.model("Milestone", milestoneSchema);

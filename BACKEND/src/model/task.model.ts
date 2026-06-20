@@ -11,6 +11,7 @@ export interface IAttachment {
   publicId?: string;
   fileType: string;
   uploadedBy: mongoose.Types.ObjectId;
+  description?: string;
   createdAt: Date;
 }
 
@@ -124,6 +125,7 @@ const taskSchema = new Schema<ITask>(
         publicId: { type: String }, // Cloudinary public_id
         fileType: { type: String, required: true },
         uploadedBy: { type: Schema.Types.ObjectId, ref: "User", required: true },
+        description: { type: String },
         createdAt: { type: Date, default: Date.now },
       },
     ],

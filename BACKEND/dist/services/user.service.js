@@ -15,15 +15,15 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.forgetPassword = exports.updateUser = exports.createUser = void 0;
 const user_model_1 = __importDefault(require("../model/user.model")); // Correctly imported default model
 const createUser = (userData) => __awaiter(void 0, void 0, void 0, function* () {
-    const { firstname, lastname, email, password, age, gender, usertype, phone } = userData;
+    const { firstname, lastname, email, password, gender, usertype, phone } = userData;
     // Simple runtime validation fallback
     if (firstname == null ||
         lastname == null ||
         email == null ||
         password == null ||
-        age == null ||
         gender == null ||
-        usertype == null) {
+        usertype == null ||
+        phone == null) {
         throw new Error("All fields are required");
     }
     // Check if user already exists
@@ -40,9 +40,8 @@ const createUser = (userData) => __awaiter(void 0, void 0, void 0, function* () 
         email,
         password, // Consider hashing this here using your schema method if you don't use pre-save hooks
         gender,
-        age,
         usertype,
-        phone: 0, // Default value for phone, adjust as needed
+        phone, // Save actual phone number
     });
     // Hashing password using the custom instance method we wrote earlier!
     user.password = yield user.hashPassword(password);

@@ -17,6 +17,9 @@ exports.createProjectSchema = zod_1.z.object({
     color: zod_1.z
         .string()
         .optional(),
+    coverImageUrl: zod_1.z
+        .string()
+        .optional(),
 });
 exports.updateProjectSchema = zod_1.z.object({
     name: zod_1.z
@@ -30,6 +33,9 @@ exports.updateProjectSchema = zod_1.z.object({
         "COMPLETED",
         "ARCHIVED",
     ]).optional(),
+    coverImageUrl: zod_1.z
+        .string()
+        .optional(),
 });
 exports.addProjectMemberSchema = zod_1.z.object({
     userId: zod_1.z

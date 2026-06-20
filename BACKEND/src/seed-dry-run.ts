@@ -107,7 +107,7 @@ async function runSeederAndRun() {
           reminders: true,
         }
       });
-      u.password = await u.hashPassword(u.password);
+      u.password = await u.hashPassword(u.password!);
       await u.save();
       users.push(u);
       console.log(`- Created User: ${ud.first} ${ud.last} (${ud.email})`);

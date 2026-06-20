@@ -11,34 +11,30 @@ import {
 } from "react-native";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { LinearGradient } from "expo-linear-gradient";
-import { loginApi } from "../../api/user.api";
+import { loginApi, loginGoogleApi, loginAppleApi } from "../../api/user.api";
 import { useApp } from "../../context/AppContext";
 
-// Design tokens — feel free to lift these into a theme file and reuse
-// across both Login and Register so the two screens always stay in sync.
-// Ice blue two-tone palette: the whole screen is the gradient, the card
-// floats on top as frosted glass rather than a flat white panel.
-const COLORS = {
-  gradientFrom: "#BEE3F8", // pale ice blue
-  gradientVia: "#6FB6E0",
-  gradientTo: "#2E7FB8", // deep ocean blue
-  cardGlass: "rgba(255,255,255,0.16)",
-  cardBorder: "rgba(255,255,255,0.35)",
-  input: "rgba(255,255,255,0.92)",
-  inputBorder: "rgba(255,255,255,0.6)",
-  inputFocused: "#FFFFFF",
-  textOnGlassPrimary: "#FFFFFF",
-  textOnGlassSecondary: "#EAF6FD",
-  textInInput: "#16313D",
-  placeholder: "#9CB9C7",
-  iconMuted: "#6FA8CC",
-  divider: "rgba(255,255,255,0.35)",
-  accentText: "#2E7FB8", // used for text/icons that sit on white surfaces
-  danger: "#FFE3DC",
-  dangerBg: "rgba(255,255,255,0.18)",
-  dangerBorder: "rgba(255,255,255,0.4)",
-  white: "#FFFFFF",
+// ─── Theme (matches Home / Tasks / Notifications / Profile screens) ───────────
+const T = {
+  bg:            "#15171C",
+  surface:       "#1D2027",
+  card:          "#22252E",
+  border:        "#2A2D38",
+  borderLight:   "#333748",
+  input:         "#1D2027",
+  inputBorder:   "#2A2D38",
+  inputFocused:  "#5865F2",
+  textPrimary:   "#ffff",
+  textSecondary: "#ffff",
+  textMuted:     "#ffff",
+  placeholder:   "#4B5060",
+  iconMuted:     "#6B7280",
+  accent:        "#5865F2",
+  accentBg:      "rgba(88,101,242,0.12)",
+  accentText:    "#A5AEFF",
+  danger:        "#F04747",
+  dangerBg:      "rgba(240,71,71,0.10)",
+  dangerBorder:  "rgba(240,71,71,0.25)",
 };
 
 export default function LoginScreen() {
@@ -50,6 +46,77 @@ export default function LoginScreen() {
   const [error, setError] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [focusedField, setFocusedField] = useState(null);
+
+  // Social OAuth Simulator States
+  const [showOAuthModal, setShowOAuthModal] = useState(false);
+  const [oauthProvider, setOauthProvider] = useState("");
+  const [oauthEmail, setOauthEmail] = useState("");
+  const [oauthFirstname, setOauthFirstname] = useState("");
+  const [oauthLastname, setOauthLastname] = useState("");
+  const [oauthUserId, setOauthUserId] = useState("");
+  const [oauthLoading, setOauthLoading] = useState(false);
+
+  const triggerOAuth = (provider) => {
+    setOauthProvider(provider);
+    setOauthEmail("");
+    setOauthFirstname(provider === "Google" ? "G-User" : "A-User");
+    setOauthLastname("OAuth");
+    setOauthUserId(`${provider.toLowerCase()}_user_${Math.floor(Math.random() * 1000000)}`);
+    setShowOAuthModal(true);
+  };
+
+  const handleOAuthSubmit = async () => {
+    if (!oauthEmail.trim() || !oauthFirstname.trim() || !oauthLastname.trim() || !oauthUserId.trim()) {
+      setError("Please fill in all simulation fields.");
+      setShowOAuthModal(false);
+      return;
+    }
+
+    setOauthLoading(true);
+    setError("");
+    try {
+      let res;
+      if (oauthProvider === "Google") {
+        res = await loginGoogleApi({
+          profile: {
+            email: oauthEmail.trim().toLowerCase(),
+            firstname: oauthFirstname.trim(),
+            lastname: oauthLastname.trim(),
+            googleId: oauthUserId.trim(),
+            avatarUrl: "https://res.cloudinary.com/dsxhyk1qu/image/upload/v1700000000/mock_logo.png"
+          }
+        });
+      } else {
+        res = await loginAppleApi({
+          profile: {
+            email: oauthEmail.trim().toLowerCase(),
+            firstname: oauthFirstname.trim(),
+            lastname: oauthLastname.trim(),
+            appleId: oauthUserId.trim(),
+          }
+        });
+      }
+
+      if (res.success && res.token) {
+        setShowOAuthModal(false);
+        await setToken(res.token);
+        await setUser(res.user);
+        router.replace("/(tabs)/home");
+      } else {
+        setError(res.message || "OAuth Authentication failed");
+        setShowOAuthModal(false);
+      }
+    } catch (err) {
+      let msg = `${oauthProvider} OAuth failed.`;
+      if (err?.response?.data?.message) {
+        msg = err.response.data.message;
+      }
+      setError(msg);
+      setShowOAuthModal(false);
+    } finally {
+      setOauthLoading(false);
+    }
+  };
 
   const handleLogin = async () => {
     if (!email.trim() || !password.trim()) {
@@ -81,15 +148,10 @@ export default function LoginScreen() {
   };
 
   const inputBorderColor = (field) =>
-    focusedField === field ? COLORS.inputFocused : "transparent";
+    focusedField === field ? T.inputFocused : T.inputBorder;
 
   return (
-    <LinearGradient
-      colors={[COLORS.gradientFrom, COLORS.gradientVia, COLORS.gradientTo]}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 1, y: 1 }}
-      style={{ flex: 1 }}
-    >
+    <View style={{ flex: 1, backgroundColor: T.bg }}>
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === "ios" ? "padding" : "height"}
@@ -100,72 +162,69 @@ export default function LoginScreen() {
           showsVerticalScrollIndicator={false}
         >
           <View style={{ paddingHorizontal: 24, paddingTop: 64, paddingBottom: 32 }}>
-            {/* Logo badge — solid white so it pops against the gradient */}
+            {/* Logo badge */}
             <View
               style={{
                 width: 52,
                 height: 52,
                 borderRadius: 16,
-                backgroundColor: COLORS.white,
+                backgroundColor: T.accentBg,
+                borderWidth: 0.5,
+                borderColor: T.accent + "40",
                 alignItems: "center",
                 justifyContent: "center",
-                shadowColor: "#0C3C5A",
-                shadowOpacity: 0.25,
-                shadowRadius: 14,
-                shadowOffset: { width: 0, height: 8 },
-                elevation: 6,
               }}
             >
-              <Ionicons name="flash" size={26} color={COLORS.accentText} />
+              <Ionicons name="flash" size={26} color={T.accent} />
             </View>
 
             <Text
               style={{
-                color: COLORS.textOnGlassPrimary,
-                fontSize: 30,
-                fontWeight: "700",
+                color: T.textPrimary,
+                fontSize: 28,
+                fontWeight: "600",
                 marginTop: 20,
                 letterSpacing: -0.5,
               }}
             >
               Welcome back
             </Text>
-            <Text style={{ color: COLORS.textOnGlassSecondary, fontSize: 15, marginTop: 6, marginBottom: 28 }}>
-              Sign in to continue to TaskFlow
+            <Text style={{ color: T.textSecondary, fontSize: 14, marginTop: 6, marginBottom: 28 }}>
+              Sign in to continue to SyncTask
             </Text>
 
-            {/* Frosted glass card */}
+            {/* Card */}
             <View
               style={{
-                backgroundColor: COLORS.cardGlass,
-                borderRadius: 24,
-                borderWidth: 1,
-                borderColor: COLORS.cardBorder,
-                padding: 22,
+                backgroundColor: T.surface,
+                borderRadius: 22,
+                borderWidth: 0.5,
+                borderColor: T.border,
+                padding: 20,
               }}
             >
               {/* Email */}
               <View style={{ marginBottom: 16 }}>
-                <Text style={{ color: COLORS.textOnGlassSecondary, fontSize: 12, fontWeight: "600", letterSpacing: 0.4, marginBottom: 8, textTransform: "uppercase" }}>
+                <Text style={{ color: T.textMuted, fontSize: 11, fontWeight: "600", letterSpacing: 0.6, marginBottom: 8, textTransform: "uppercase" }}>
                   Email address
                 </Text>
                 <View
                   style={{
                     flexDirection: "row",
                     alignItems: "center",
-                    backgroundColor: COLORS.input,
-                    borderWidth: 1.5,
+                    backgroundColor: T.input,
+                    borderWidth: 1,
                     borderColor: inputBorderColor("email"),
-                    borderRadius: 16,
+                    borderRadius: 14,
                     paddingHorizontal: 14,
                     gap: 10,
                   }}
                 >
-                  <Ionicons name="mail-outline" size={18} color={COLORS.iconMuted} />
+                  <Ionicons name="mail-outline" size={17} color={T.iconMuted} />
                   <TextInput
-                    style={{ flex: 1, color: COLORS.textInInput, paddingVertical: 14, fontSize: 15 }}
+                    style={{ flex: 1, color: T.textPrimary, paddingVertical: 14, fontSize: 15 }}
                     placeholder="you@example.com"
-                    placeholderTextColor={COLORS.placeholder}
+                    placeholderTextColor={T.placeholder}
                     keyboardType="email-address"
                     autoCapitalize="none"
                     autoCorrect={false}
@@ -179,26 +238,26 @@ export default function LoginScreen() {
 
               {/* Password */}
               <View style={{ marginBottom: 8 }}>
-                <Text style={{ color: COLORS.textOnGlassSecondary, fontSize: 12, fontWeight: "600", letterSpacing: 0.4, marginBottom: 8, textTransform: "uppercase" }}>
+                <Text style={{ color: T.textMuted, fontSize: 11, fontWeight: "600", letterSpacing: 0.6, marginBottom: 8, textTransform: "uppercase" }}>
                   Password
                 </Text>
                 <View
                   style={{
                     flexDirection: "row",
                     alignItems: "center",
-                    backgroundColor: COLORS.input,
-                    borderWidth: 1.5,
+                    backgroundColor: T.input,
+                    borderWidth: 1,
                     borderColor: inputBorderColor("password"),
-                    borderRadius: 16,
+                    borderRadius: 14,
                     paddingHorizontal: 14,
                     gap: 10,
                   }}
                 >
-                  <Ionicons name="lock-closed-outline" size={18} color={COLORS.iconMuted} />
+                  <Ionicons name="lock-closed-outline" size={17} color={T.iconMuted} />
                   <TextInput
-                    style={{ flex: 1, color: COLORS.textInInput, paddingVertical: 14, fontSize: 15 }}
+                    style={{ flex: 1, color: T.textPrimary, paddingVertical: 14, fontSize: 15 }}
                     placeholder="Min. 3 characters"
-                    placeholderTextColor={COLORS.placeholder}
+                    placeholderTextColor={T.placeholder}
                     secureTextEntry={!showPassword}
                     value={password}
                     onChangeText={setPassword}
@@ -208,15 +267,15 @@ export default function LoginScreen() {
                   <TouchableOpacity onPress={() => setShowPassword(!showPassword)} hitSlop={8}>
                     <Ionicons
                       name={showPassword ? "eye-off-outline" : "eye-outline"}
-                      size={18}
-                      color={COLORS.accentText}
+                      size={17}
+                      color={T.accent}
                     />
                   </TouchableOpacity>
                 </View>
               </View>
 
               <TouchableOpacity style={{ alignSelf: "flex-end", marginBottom: 18, marginTop: 4 }}>
-                <Text style={{ color: COLORS.white, fontSize: 13, fontWeight: "600" }}>
+                <Text style={{ color: T.accentText, fontSize: 13, fontWeight: "600" }}>
                   Forgot password?
                 </Text>
               </TouchableOpacity>
@@ -224,10 +283,10 @@ export default function LoginScreen() {
               {error ? (
                 <View
                   style={{
-                    backgroundColor: COLORS.dangerBg,
-                    borderWidth: 1,
-                    borderColor: COLORS.dangerBorder,
-                    borderRadius: 14,
+                    backgroundColor: T.dangerBg,
+                    borderWidth: 0.5,
+                    borderColor: T.dangerBorder,
+                    borderRadius: 12,
                     padding: 12,
                     marginBottom: 16,
                     flexDirection: "row",
@@ -235,8 +294,8 @@ export default function LoginScreen() {
                     gap: 8,
                   }}
                 >
-                  <Ionicons name="alert-circle-outline" size={16} color={COLORS.white} />
-                  <Text style={{ color: COLORS.white, fontSize: 13, flex: 1 }}>{error}</Text>
+                  <Ionicons name="alert-circle-outline" size={15} color={T.danger} />
+                  <Text style={{ color: T.danger, fontSize: 13, flex: 1 }}>{error}</Text>
                 </View>
               ) : null}
 
@@ -245,21 +304,16 @@ export default function LoginScreen() {
                 disabled={loading}
                 activeOpacity={0.85}
                 style={{
-                  backgroundColor: COLORS.white,
-                  borderRadius: 16,
-                  paddingVertical: 16,
+                  backgroundColor: T.accent,
+                  borderRadius: 14,
+                  paddingVertical: 15,
                   alignItems: "center",
-                  shadowColor: "#0C3C5A",
-                  shadowOpacity: 0.25,
-                  shadowRadius: 14,
-                  shadowOffset: { width: 0, height: 6 },
-                  elevation: 4,
                 }}
               >
                 {loading ? (
-                  <ActivityIndicator color={COLORS.accentText} />
+                  <ActivityIndicator color="#fff" />
                 ) : (
-                  <Text style={{ color: COLORS.accentText, fontWeight: "700", fontSize: 15, letterSpacing: 0.3 }}>
+                  <Text style={{ color: "#fff", fontWeight: "600", fontSize: 15, letterSpacing: 0.3 }}>
                     Sign in
                   </Text>
                 )}
@@ -267,17 +321,18 @@ export default function LoginScreen() {
             </View>
 
             {/* Divider */}
-            <View style={{ flexDirection: "row", alignItems: "center", marginVertical: 26 }}>
-              <View style={{ flex: 1, height: 1, backgroundColor: COLORS.divider }} />
-              <Text style={{ color: COLORS.textOnGlassSecondary, marginHorizontal: 14, fontSize: 12 }}>
+            <View style={{ flexDirection: "row", alignItems: "center", marginVertical: 24 }}>
+              <View style={{ flex: 1, height: 0.5, backgroundColor: T.border }} />
+              <Text style={{ color: T.textMuted, marginHorizontal: 14, fontSize: 12 }}>
                 or continue with
               </Text>
-              <View style={{ flex: 1, height: 1, backgroundColor: COLORS.divider }} />
+              <View style={{ flex: 1, height: 0.5, backgroundColor: T.border }} />
             </View>
 
             {/* Social */}
             <View style={{ flexDirection: "row", gap: 12 }}>
               <TouchableOpacity
+                onPress={() => triggerOAuth("Google")}
                 activeOpacity={0.8}
                 style={{
                   flex: 1,
@@ -285,17 +340,20 @@ export default function LoginScreen() {
                   alignItems: "center",
                   justifyContent: "center",
                   gap: 8,
-                  backgroundColor: COLORS.input,
-                  borderRadius: 16,
+                  backgroundColor: T.surface,
+                  borderWidth: 0.5,
+                  borderColor: T.border,
+                  borderRadius: 14,
                   paddingVertical: 13,
                 }}
               >
-                <Ionicons name="logo-google" size={17} color={COLORS.accentText} />
-                <Text style={{ color: COLORS.textInInput, fontWeight: "600", fontSize: 14 }}>
+                <Ionicons name="logo-google" size={16} color={T.textSecondary} />
+                <Text style={{ color: T.textPrimary, fontWeight: "600", fontSize: 14 }}>
                   Google
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity
+                onPress={() => triggerOAuth("Apple")}
                 activeOpacity={0.8}
                 style={{
                   flex: 1,
@@ -303,25 +361,27 @@ export default function LoginScreen() {
                   alignItems: "center",
                   justifyContent: "center",
                   gap: 8,
-                  backgroundColor: COLORS.input,
-                  borderRadius: 16,
+                  backgroundColor: T.surface,
+                  borderWidth: 0.5,
+                  borderColor: T.border,
+                  borderRadius: 14,
                   paddingVertical: 13,
                 }}
               >
-                <Ionicons name="logo-apple" size={18} color={COLORS.accentText} />
-                <Text style={{ color: COLORS.textInInput, fontWeight: "600", fontSize: 14 }}>
+                <Ionicons name="logo-apple" size={17} color={T.textSecondary} />
+                <Text style={{ color: T.textPrimary, fontWeight: "600", fontSize: 14 }}>
                   Apple
                 </Text>
               </TouchableOpacity>
             </View>
 
             {/* Footer link */}
-            <View style={{ flexDirection: "row", justifyContent: "center", marginTop: 30 }}>
-              <Text style={{ color: COLORS.textOnGlassSecondary, fontSize: 14 }}>
+            <View style={{ flexDirection: "row", justifyContent: "center", marginTop: 28 }}>
+              <Text style={{ color: T.textMuted, fontSize: 14 }}>
                 Don't have an account?{" "}
               </Text>
               <TouchableOpacity onPress={() => router.push("/(auth)/register")}>
-                <Text style={{ color: COLORS.white, fontWeight: "700", fontSize: 14 }}>
+                <Text style={{ color: T.accentText, fontWeight: "700", fontSize: 14 }}>
                   Sign up
                 </Text>
               </TouchableOpacity>
@@ -329,6 +389,198 @@ export default function LoginScreen() {
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
-    </LinearGradient>
+
+      {/* OAuth Simulator Modal */}
+      {showOAuthModal && (
+        <View
+          style={{
+            position: "absolute",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: "rgba(0,0,0,0.75)",
+            justifyContent: "center",
+            padding: 24,
+            zIndex: 9999,
+          }}
+        >
+          <View
+            style={{
+              backgroundColor: T.surface,
+              borderRadius: 22,
+              padding: 22,
+              borderWidth: 0.5,
+              borderColor: T.border,
+            }}
+          >
+            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                <Ionicons
+                  name={oauthProvider === "Google" ? "logo-google" : "logo-apple"}
+                  size={20}
+                  color={T.accent}
+                />
+                <Text style={{ fontSize: 16, fontWeight: "600", color: T.textPrimary }}>
+                  {oauthProvider} sign-in simulator
+                </Text>
+              </View>
+              <TouchableOpacity onPress={() => setShowOAuthModal(false)}>
+                <Ionicons name="close-circle-outline" size={22} color={T.textMuted} />
+              </TouchableOpacity>
+            </View>
+
+            <Text style={{ color: T.textSecondary, fontSize: 13, marginBottom: 20, lineHeight: 18 }}>
+              Real OAuth requires provisioning certificates. This dialog simulates the authentication redirect response and logs you in.
+            </Text>
+
+            {/* Email */}
+            <View style={{ marginBottom: 12 }}>
+              <Text style={{ fontSize: 11, fontWeight: "600", color: T.textMuted, marginBottom: 6, textTransform: "uppercase" }}>
+                Email
+              </Text>
+              <TextInput
+                style={{
+                  backgroundColor: T.input,
+                  borderWidth: 0.5,
+                  borderColor: T.inputBorder,
+                  borderRadius: 12,
+                  padding: 12,
+                  color: T.textPrimary,
+                  fontSize: 14,
+                }}
+                placeholder="test.oauth@example.com"
+                placeholderTextColor={T.placeholder}
+                value={oauthEmail}
+                onChangeText={setOauthEmail}
+                keyboardType="email-address"
+                autoCapitalize="none"
+              />
+            </View>
+
+            {/* First Name & Last Name */}
+            <View style={{ flexDirection: "row", gap: 12, marginBottom: 12 }}>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 11, fontWeight: "600", color: T.textMuted, marginBottom: 6, textTransform: "uppercase" }}>
+                  First Name
+                </Text>
+                <TextInput
+                  style={{
+                    backgroundColor: T.input,
+                    borderWidth: 0.5,
+                    borderColor: T.inputBorder,
+                    borderRadius: 12,
+                    padding: 12,
+                    color: T.textPrimary,
+                    fontSize: 14,
+                  }}
+                  placeholder="John"
+                  placeholderTextColor={T.placeholder}
+                  value={oauthFirstname}
+                  onChangeText={setOauthFirstname}
+                />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 11, fontWeight: "600", color: T.textMuted, marginBottom: 6, textTransform: "uppercase" }}>
+                  Last Name
+                </Text>
+                <TextInput
+                  style={{
+                    backgroundColor: T.input,
+                    borderWidth: 0.5,
+                    borderColor: T.inputBorder,
+                    borderRadius: 12,
+                    padding: 12,
+                    color: T.textPrimary,
+                    fontSize: 14,
+                  }}
+                  placeholder="Doe"
+                  placeholderTextColor={T.placeholder}
+                  value={oauthLastname}
+                  onChangeText={setOauthLastname}
+                />
+              </View>
+            </View>
+
+            {/* Provider User ID */}
+            <View style={{ marginBottom: 20 }}>
+              <Text style={{ fontSize: 11, fontWeight: "600", color: T.textMuted, marginBottom: 6, textTransform: "uppercase" }}>
+                {oauthProvider} User ID
+              </Text>
+              <TextInput
+                style={{
+                  backgroundColor: T.input,
+                  borderWidth: 0.5,
+                  borderColor: T.inputBorder,
+                  borderRadius: 12,
+                  padding: 12,
+                  color: T.textPrimary,
+                  fontSize: 14,
+                }}
+                placeholder="oauth_uid_123"
+                placeholderTextColor={T.placeholder}
+                value={oauthUserId}
+                onChangeText={setOauthUserId}
+              />
+            </View>
+
+            {/* Presets */}
+            <View style={{ marginBottom: 20 }}>
+              <Text style={{ fontSize: 10, fontWeight: "600", color: T.textMuted, marginBottom: 8, textTransform: "uppercase" }}>
+                Quick test profiles
+              </Text>
+              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+                {[
+                  { email: "alex.oauth@sync-demo.com", first: "Alex", last: "OAuth", id: `${oauthProvider.toLowerCase()}_alex` },
+                  { email: "sam.oauth@sync-demo.com", first: "Sam", last: "OAuth", id: `${oauthProvider.toLowerCase()}_sam` }
+                ].map((p, idx) => (
+                  <TouchableOpacity
+                    key={idx}
+                    onPress={() => {
+                      setOauthEmail(p.email);
+                      setOauthFirstname(p.first);
+                      setOauthLastname(p.last);
+                      setOauthUserId(p.id);
+                    }}
+                    style={{
+                      backgroundColor: T.card,
+                      borderWidth: 0.5,
+                      borderColor: T.border,
+                      paddingHorizontal: 12,
+                      paddingVertical: 6,
+                      borderRadius: 8,
+                    }}
+                  >
+                    <Text style={{ fontSize: 11, color: T.textSecondary, fontWeight: "600" }}>
+                      {p.first} ({p.email})
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+
+            <TouchableOpacity
+              onPress={handleOAuthSubmit}
+              disabled={oauthLoading}
+              activeOpacity={0.85}
+              style={{
+                backgroundColor: T.accent,
+                borderRadius: 14,
+                paddingVertical: 14,
+                alignItems: "center",
+              }}
+            >
+              {oauthLoading ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={{ color: "#fff", fontWeight: "600", fontSize: 15 }}>
+                  Simulate redirect & login
+                </Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
+    </View>
   );
 }

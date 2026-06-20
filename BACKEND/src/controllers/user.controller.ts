@@ -5,6 +5,7 @@ import usermodel from "../model/user.model";
 import { success } from "zod";
 import cloudinary from "../config/cloudinary";
 import fs from "fs";
+import jwt from "jsonwebtoken";
 
 export const signup = async (req: Request, res: Response) => {
   const errors = validationResult(req);
@@ -218,10 +219,30 @@ export const getPinnedItemsController = async (req: Request, res: Response) => {
       return res.status(404).json({ success: false, message: "User not found" });
     }
 
+    const populatedProjects = (user.pinnedProjects || []) as any[];
+    const populatedTasks = (user.pinnedTasks || []) as any[];
+
+    const pinnedProjectsFiltered = populatedProjects.filter(p => p !== null);
+    const pinnedTasksFiltered = populatedTasks.filter(t => t !== null);
+
+    // Self-healing: if any pinned items were deleted and populated as null, clean up DB
+    let needsUpdate = false;
+    if (pinnedProjectsFiltered.length !== populatedProjects.length) {
+      user.pinnedProjects = pinnedProjectsFiltered.map((p: any) => p._id);
+      needsUpdate = true;
+    }
+    if (pinnedTasksFiltered.length !== populatedTasks.length) {
+      user.pinnedTasks = pinnedTasksFiltered.map((t: any) => t._id);
+      needsUpdate = true;
+    }
+    if (needsUpdate) {
+      await user.save();
+    }
+
     return res.status(200).json({
       success: true,
-      pinnedProjects: user.pinnedProjects || [],
-      pinnedTasks: user.pinnedTasks || [],
+      pinnedProjects: pinnedProjectsFiltered,
+      pinnedTasks: pinnedTasksFiltered,
     });
   } catch (error: any) {
     return res.status(500).json({ success: false, message: error.message || "Failed to fetch pinned items" });
@@ -361,5 +382,150 @@ export const deleteSavedFilterController = async (req: Request, res: Response) =
     });
   } catch (error: any) {
     return res.status(500).json({ success: false, message: error.message || "Failed to delete saved filter" });
+  }
+};
+
+export const googleAuth = async (req: Request, res: Response) => {
+  const { idToken, profile } = req.body;
+
+  try {
+    let email: string;
+    let firstname: string;
+    let lastname: string;
+    let googleId: string;
+    let avatarUrl: string | undefined;
+
+    if (idToken) {
+      // Real Google token verification
+      const verifyUrl = `https://oauth2.googleapis.com/tokeninfo?id_token=${idToken}`;
+      const response = await fetch(verifyUrl);
+      if (!response.ok) {
+        return res.status(400).json({ success: false, message: "Invalid Google ID token" });
+      }
+      const tokenInfo = await response.json();
+      
+      email = tokenInfo.email;
+      firstname = tokenInfo.given_name || "Google";
+      lastname = tokenInfo.family_name || "User";
+      googleId = tokenInfo.sub;
+      avatarUrl = tokenInfo.picture;
+    } else if (profile) {
+      // Simulated profile (for development/testing/simulator)
+      if (process.env.NODE_ENV === "production") {
+        return res.status(400).json({ success: false, message: "Simulated profiles are not allowed in production mode. A valid token is required." });
+      }
+      email = profile.email;
+      firstname = profile.firstname || "Google";
+      lastname = profile.lastname || "User";
+      googleId = profile.googleId;
+      avatarUrl = profile.avatarUrl;
+    } else {
+      return res.status(400).json({ success: false, message: "Missing Google authentication data" });
+    }
+
+    if (!email || !googleId) {
+      return res.status(400).json({ success: false, message: "Required user info not found in Google profile" });
+    }
+
+    // Find or create user
+    let user = await usermodel.findOne({ $or: [{ googleId }, { email: email.toLowerCase() }] });
+
+    if (!user) {
+      // Create new user
+      user = new usermodel({
+        username: { firstname, lastname },
+        email: email.toLowerCase(),
+        gender: "not_specified",
+        usertype: "individual",
+        googleId,
+        avatarUrl: avatarUrl || "",
+        phone: 1234567890 // Temporary dummy phone number
+      });
+      await user.save();
+    } else if (!user.googleId) {
+      // Link Google account to existing email account
+      user.googleId = googleId;
+      if (avatarUrl && !user.avatarUrl) {
+        user.avatarUrl = avatarUrl;
+      }
+      await user.save();
+    }
+
+    const token = user.generateToken();
+    return res.status(200).json({ success: true, user, token });
+  } catch (error: any) {
+    console.error("Google Auth Error:", error);
+    return res.status(500).json({ success: false, message: error.message || "Internal server error" });
+  }
+};
+
+export const appleAuth = async (req: Request, res: Response) => {
+  const { identityToken, profile } = req.body;
+
+  try {
+    let email: string;
+    let firstname: string;
+    let lastname: string;
+    let appleId: string;
+
+    if (identityToken) {
+      // Decode Apple ID Token
+      const decoded: any = jwt.decode(identityToken);
+      if (!decoded) {
+        return res.status(400).json({ success: false, message: "Invalid Apple identity token" });
+      }
+      email = decoded.email;
+      appleId = decoded.sub;
+      firstname = "Apple";
+      lastname = "User";
+
+      // If user profile is sent (Apple only sends name on the very first authentication)
+      if (profile && profile.username) {
+        firstname = profile.username.firstname || firstname;
+        lastname = profile.username.lastname || lastname;
+      }
+    } else if (profile) {
+      // Simulated profile (for development/testing/simulator)
+      if (process.env.NODE_ENV === "production") {
+        return res.status(400).json({ success: false, message: "Simulated profiles are not allowed in production mode. A valid token is required." });
+      }
+      email = profile.email;
+      firstname = profile.firstname || "Apple";
+      lastname = profile.lastname || "User";
+      appleId = profile.appleId;
+    } else {
+      return res.status(400).json({ success: false, message: "Missing Apple authentication data" });
+    }
+
+    if (!email || !appleId) {
+      return res.status(400).json({ success: false, message: "Required user info not found in Apple profile" });
+    }
+
+    // Find or create user
+    let user = await usermodel.findOne({ $or: [{ appleId }, { email: email.toLowerCase() }] });
+
+    if (!user) {
+      // Create new user
+      user = new usermodel({
+        username: { firstname, lastname },
+        email: email.toLowerCase(),
+        gender: "not_specified",
+        usertype: "individual",
+        appleId,
+        avatarUrl: "",
+        phone: 1234567890 // Temporary dummy phone number
+      });
+      await user.save();
+    } else if (!user.appleId) {
+      // Link Apple account to existing email account
+      user.appleId = appleId;
+      await user.save();
+    }
+
+    const token = user.generateToken();
+    return res.status(200).json({ success: true, user, token });
+  } catch (error: any) {
+    console.error("Apple Auth Error:", error);
+    return res.status(500).json({ success: false, message: error.message || "Internal server error" });
   }
 };

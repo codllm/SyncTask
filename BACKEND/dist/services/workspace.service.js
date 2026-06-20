@@ -17,6 +17,7 @@ const workspace_model_1 = __importDefault(require("../model/workspace.model"));
 const project_model_1 = __importDefault(require("../model/project.model"));
 const mongoose_1 = __importDefault(require("mongoose"));
 const notification_service_1 = require("./notification.service");
+const demo_service_1 = require("./demo.service");
 // CREATE WORKSPACE
 const createWorkspace = (_a) => __awaiter(void 0, [_a], void 0, function* ({ name, description, owner, }) {
     const workspace = yield workspace_model_1.default.create({
@@ -46,16 +47,26 @@ const getWorkspaceById = (workspaceId) => __awaiter(void 0, void 0, void 0, func
 exports.getWorkspaceById = getWorkspaceById;
 // GET USER WORKSPACES
 const getUserWorkspaces = (userId) => __awaiter(void 0, void 0, void 0, function* () {
-    const workspaces = yield workspace_model_1.default.find({
+    let workspaces = yield workspace_model_1.default.find({
         "members.user": userId,
     })
         .populate("owner")
         .populate("members.user");
+    if (workspaces.length === 0) {
+        // Automatically seed two dummy workspaces with projects/tasks for first-time or empty users!
+        yield (0, demo_service_1.seedDemoWorkspacesForUser)(userId);
+        // Refetch the newly created demo workspaces
+        workspaces = yield workspace_model_1.default.find({
+            "members.user": userId,
+        })
+            .populate("owner")
+            .populate("members.user");
+    }
     return workspaces;
 });
 exports.getUserWorkspaces = getUserWorkspaces;
 // UPDATE WORKSPACE
-const updateWorkspace = (_a) => __awaiter(void 0, [_a], void 0, function* ({ workspaceId, name, description, }) {
+const updateWorkspace = (_a) => __awaiter(void 0, [_a], void 0, function* ({ workspaceId, name, description, logoUrl, }) {
     const workspace = yield workspace_model_1.default.findById(workspaceId);
     if (!workspace) {
         throw new Error("Workspace not found");
@@ -65,6 +76,9 @@ const updateWorkspace = (_a) => __awaiter(void 0, [_a], void 0, function* ({ wor
     }
     if (description) {
         workspace.description = description;
+    }
+    if (logoUrl !== undefined) {
+        workspace.logoUrl = logoUrl;
     }
     yield workspace.save();
     return workspace;
