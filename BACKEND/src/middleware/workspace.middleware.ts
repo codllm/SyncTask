@@ -48,7 +48,7 @@ export const isWorkspaceAdmin = async (
         user._id.toString()
     );
 
-    if (!member) {
+    if (!member || member.status === "pending") {
       return res.status(403).json({
         success: false,
         message: "Access denied",
@@ -140,7 +140,13 @@ export const blockViewers = async (
         const workspaceMember = workspace.members.find(
           (m: any) => m.user.toString() === userId
         );
-        if (workspaceMember && workspaceMember.role === "viewer") {
+        if (!workspaceMember || workspaceMember.status === "pending") {
+          return res.status(403).json({
+            success: false,
+            message: "Access denied",
+          });
+        }
+        if (workspaceMember.role === "viewer") {
           return res.status(403).json({
             success: false,
             message: "Action forbidden: View-only role in workspace",

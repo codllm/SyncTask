@@ -50,6 +50,7 @@ router.get('/forget-password', [
 ], user_controller_1.forgetPass);
 router.get("/profile", auth_middleware_1.userauth, user_controller_1.profile);
 router.put("/preferences", auth_middleware_1.userauth, user_controller_1.updatePreferences);
+router.put("/theme", auth_middleware_1.userauth, user_controller_1.updateThemeColorController);
 router.post("/logout", auth_middleware_1.userauth, user_controller_1.logout);
 // Pinning routes
 router.post("/pin-project/:projectId", auth_middleware_1.userauth, user_controller_1.togglePinProjectController);
@@ -60,4 +61,10 @@ router.put("/profile/avatar", auth_middleware_1.userauth, upload_middleware_1.up
 router.post("/saved-filters", auth_middleware_1.userauth, user_controller_1.saveFilterController);
 router.get("/saved-filters/:projectId", auth_middleware_1.userauth, user_controller_1.getSavedFiltersController);
 router.delete("/saved-filters/:filterId", auth_middleware_1.userauth, user_controller_1.deleteSavedFilterController);
+// Push token routes
+router.post("/push-token", auth_middleware_1.userauth, user_controller_1.registerPushTokenController);
+router.post("/push-token/remove", auth_middleware_1.userauth, user_controller_1.removePushTokenController);
+// Social login routes
+router.post("/oauth/google", user_controller_1.googleAuth);
+router.post("/oauth/apple", user_controller_1.appleAuth);
 exports.default = router;

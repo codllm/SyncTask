@@ -32,6 +32,12 @@ export const initSocket = (server: HttpServer) => {
       console.log(`Socket ${socket.id} joined project room: ${projectId}`);
     });
 
+    // User leaves a project room when switching projects
+    socket.on("leave-project-room", (projectId: string) => {
+      socket.leave(`project:${projectId}`);
+      console.log(`Socket ${socket.id} left project room: ${projectId}`);
+    });
+
     // Handle typing indicators
     socket.on("typing:start", (data: { projectId: string, userId: string, taskId?: string }) => {
       socket.to(`project:${data.projectId}`).emit("typing:started", data);

@@ -27,7 +27,12 @@ export const searchWorkspacesService = async (query: string, userId: string) => 
     return await workspaceModel
       .find({
         name: { $regex: query, $options: "i" },
-        "members.user": new mongoose.Types.ObjectId(userId),
+        members: {
+          $elemMatch: {
+            user: new mongoose.Types.ObjectId(userId),
+            status: { $ne: "pending" }
+          }
+        }
       })
       .select("name description")
       .limit(10);

@@ -4,7 +4,7 @@ import React from "react";
 import { Feather } from "@expo/vector-icons";
 
 export default function TabsLayout() {
-  const { unreadCount, themeColor } = useApp();
+  const { unreadCount, themeColor, todoMode } = useApp();
 
   return (
     <Tabs
@@ -12,7 +12,7 @@ export default function TabsLayout() {
         headerShown: false,
         tabBarShowLabel: false,
         tabBarStyle: {
-          backgroundColor: "#15171C",
+          backgroundColor: "#0D1117",
           borderTopColor: "#22283A",
           borderTopWidth: 1,
           height: 65,
@@ -34,6 +34,7 @@ export default function TabsLayout() {
         name="projects"
         options={{
           title: "Projects",
+          href: todoMode ? null : undefined,
           tabBarIcon: ({ color, size }) => (
             <Feather name="folder" size={20} color={color} />
           ),

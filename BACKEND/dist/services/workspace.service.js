@@ -18,6 +18,7 @@ const project_model_1 = __importDefault(require("../model/project.model"));
 const mongoose_1 = __importDefault(require("mongoose"));
 const notification_service_1 = require("./notification.service");
 const demo_service_1 = require("./demo.service");
+const user_model_1 = __importDefault(require("../model/user.model"));
 // CREATE WORKSPACE
 const createWorkspace = (_a) => __awaiter(void 0, [_a], void 0, function* ({ name, description, owner, }) {
     const workspace = yield workspace_model_1.default.create({
@@ -47,20 +48,46 @@ const getWorkspaceById = (workspaceId) => __awaiter(void 0, void 0, void 0, func
 exports.getWorkspaceById = getWorkspaceById;
 // GET USER WORKSPACES
 const getUserWorkspaces = (userId) => __awaiter(void 0, void 0, void 0, function* () {
+    // Delete any personal workspaces and their projects
+    const personalWorkspaces = yield workspace_model_1.default.find({
+        owner: userId,
+        name: { $in: ["Personal Tasks Workspace", "Personal Workspace"] }
+    });
+    if (personalWorkspaces.length > 0) {
+        const personalIds = personalWorkspaces.map(w => w._id);
+        yield project_model_1.default.deleteMany({ workspace: { $in: personalIds } });
+        yield workspace_model_1.default.deleteMany({ _id: { $in: personalIds } });
+    }
     let workspaces = yield workspace_model_1.default.find({
-        "members.user": userId,
+        members: {
+            $elemMatch: {
+                user: userId,
+                status: { $ne: "pending" },
+            },
+        },
     })
         .populate("owner")
         .populate("members.user");
     if (workspaces.length === 0) {
-        // Automatically seed two dummy workspaces with projects/tasks for first-time or empty users!
-        yield (0, demo_service_1.seedDemoWorkspacesForUser)(userId);
-        // Refetch the newly created demo workspaces
-        workspaces = yield workspace_model_1.default.find({
-            "members.user": userId,
-        })
-            .populate("owner")
-            .populate("members.user");
+        // Check if the user has already had their demo workspaces seeded
+        const user = yield user_model_1.default.findById(userId);
+        if (user && !user.demoSeeded) {
+            // Automatically seed two dummy workspaces with projects/tasks for first-time or empty users!
+            yield (0, demo_service_1.seedDemoWorkspacesForUser)(userId);
+            user.demoSeeded = true;
+            yield user.save();
+            // Refetch the newly created demo workspaces
+            workspaces = yield workspace_model_1.default.find({
+                members: {
+                    $elemMatch: {
+                        user: userId,
+                        status: { $ne: "pending" },
+                    },
+                },
+            })
+                .populate("owner")
+                .populate("members.user");
+        }
     }
     return workspaces;
 });
@@ -85,7 +112,8 @@ const updateWorkspace = (_a) => __awaiter(void 0, [_a], void 0, function* ({ wor
 });
 exports.updateWorkspace = updateWorkspace;
 // ADD MEMBER
-const addUserToWorkspace = (workspaceId, userId, inviterId) => __awaiter(void 0, void 0, void 0, function* () {
+const addUserToWorkspace = (workspaceId, userId, inviterId //optional, to specify who is inviting (admin or owner
+) => __awaiter(void 0, void 0, void 0, function* () {
     const workspace = yield workspace_model_1.default.findById(workspaceId);
     if (!workspace) {
         throw new Error("Workspace not found");
@@ -97,6 +125,7 @@ const addUserToWorkspace = (workspaceId, userId, inviterId) => __awaiter(void 0,
     workspace.members.push({
         user: new mongoose_1.default.Types.ObjectId(userId),
         role: "member",
+        status: "pending",
     });
     yield workspace.save();
     yield (0, notification_service_1.createNotification)({
@@ -104,8 +133,10 @@ const addUserToWorkspace = (workspaceId, userId, inviterId) => __awaiter(void 0,
         sender: inviterId || workspace.owner.toString(),
         type: "WORKSPACE_INVITE",
         title: "Workspace Invitation",
-        message: `You have been added to the workspace: "${workspace.name}"`,
+        message: `You have been invited to join the workspace: "${workspace.name}"`,
         link: `/workspaces/${workspace._id}`,
+        workspace: workspace._id,
+        inviteStatus: "pending",
     });
     return workspace;
 });

@@ -63,6 +63,11 @@ const workspaceSchema = new mongoose_1.Schema({
                 enum: ["owner", "admin", "member", "viewer"],
                 default: "member",
             },
+            status: {
+                type: String,
+                enum: ["joined", "pending"],
+                default: "joined",
+            },
         },
     ],
 }, {

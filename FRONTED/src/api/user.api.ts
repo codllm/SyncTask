@@ -193,4 +193,9 @@ export const loginAppleApi = async (payload: OAuthApplePayload) => {
   return { success: true, ...res.data };
 };
 
+export const updateThemeColorApi = async (themeColor: string): Promise<{ success: boolean; user: any }> => {
+  const res = await api.put("/api/users/theme", { themeColor });
+  return res.data;
+};
+
 export default api;

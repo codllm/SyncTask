@@ -1,6 +1,8 @@
 import Notification, { INotification } from "../model/notification.model";
 import { emitToUser } from "./socket";
+import { sendPushNotification } from "./push.service";
 import mongoose from "mongoose";
+import Workspace from "../model/workspace.model";
 
 interface CreateNotificationPayload {
   recipient: string | mongoose.Types.ObjectId;
@@ -9,6 +11,8 @@ interface CreateNotificationPayload {
   title: string;
   message: string;
   link?: string;
+  workspace?: string | mongoose.Types.ObjectId;
+  inviteStatus?: "pending" | "accepted" | "declined";
 }
 
 /**
@@ -21,13 +25,22 @@ export const createNotification = async (
   
   // Populate sender details for the socket event
   const populatedNotification = await Notification.findById(notification._id)
-    .populate("sender", "username email");
+    .populate("sender", "username email")
+    .populate("workspace", "name logoUrl");
 
   // Emit a real-time socket event directly to the recipient's room
   emitToUser(
     payload.recipient.toString(),
     "notification:received",
     populatedNotification
+  );
+
+  // Send background remote push notification
+  sendPushNotification(
+    payload.recipient.toString(),
+    payload.title,
+    payload.message,
+    { notificationId: notification._id.toString() }
   );
 
   return notification;
@@ -38,7 +51,7 @@ export const createNotification = async (
  */
 export const getUserNotifications = async (
   userId: string,
-  limit: number = 20,
+  limit: number = 15,
   page: number = 1,
   type?: string
 ): Promise<{ notifications: INotification[]; unreadCount: number }> => {
@@ -51,6 +64,7 @@ export const getUserNotifications = async (
 
   const notifications = await Notification.find(query)
     .populate("sender", "username email")
+    .populate("workspace", "name logoUrl")
     .sort({ createdAt: -1 })
     .skip(skip)
     .limit(limit);
@@ -74,7 +88,7 @@ export const markNotificationAsRead = async (
     { _id: notificationId, recipient: userId },
     { $set: { read: true } },
     { new: true }
-  ).populate("sender", "username email");
+  ).populate("sender", "username email").populate("workspace", "name logoUrl");
 
   if (!notification) {
     throw new Error("Notification not found or unauthorized");
@@ -101,4 +115,100 @@ export const markAllNotificationsAsRead = async (
   emitToUser(userId, "notifications:read-all", { userId });
 
   return { success: true, modifiedCount: result.modifiedCount };
+};
+
+/**
+ * Accept workspace invite by notification ID
+ */
+export const acceptWorkspaceInvite = async (
+  notificationId: string,
+  userId: string
+): Promise<INotification> => {
+  const notification = await Notification.findOne({ _id: notificationId, recipient: userId });
+  if (!notification) {
+    throw new Error("Notification not found or unauthorized");
+  }
+  if (notification.type !== "WORKSPACE_INVITE") {
+    throw new Error("Invalid notification type");
+  }
+
+  const workspaceId = notification.workspace || notification.link?.split("/").pop();
+  if (!workspaceId) {
+    throw new Error("Workspace ID not found in notification");
+  }
+
+  const workspace = await Workspace.findById(workspaceId);
+  if (!workspace) {
+    throw new Error("Workspace not found");
+  }
+
+  const member = workspace.members.find(
+    (m) => m.user.toString() === userId
+  );
+
+  if (!member) {
+    throw new Error("You are not invited to this workspace");
+  }
+
+  member.status = "joined";
+  await workspace.save();
+
+  notification.inviteStatus = "accepted";
+  notification.read = true;
+  await notification.save();
+
+  const populated = await Notification.findById(notification._id)
+    .populate("sender", "username email")
+    .populate("workspace", "name logoUrl");
+
+  if (populated) {
+    emitToUser(userId, "notification:updated", populated);
+    return populated;
+  }
+
+  return notification;
+};
+
+/**
+ * Decline workspace invite by notification ID
+ */
+export const declineWorkspaceInvite = async (
+  notificationId: string,
+  userId: string
+): Promise<INotification> => {
+  const notification = await Notification.findOne({ _id: notificationId, recipient: userId });
+  if (!notification) {
+    throw new Error("Notification not found or unauthorized");
+  }
+  if (notification.type !== "WORKSPACE_INVITE") {
+    throw new Error("Invalid notification type");
+  }
+
+  const workspaceId = notification.workspace || notification.link?.split("/").pop();
+  if (!workspaceId) {
+    throw new Error("Workspace ID not found in notification");
+  }
+
+  const workspace = await Workspace.findById(workspaceId);
+  if (workspace) {
+    workspace.members = workspace.members.filter(
+      (m) => m.user.toString() !== userId
+    );
+    await workspace.save();
+  }
+
+  notification.inviteStatus = "declined";
+  notification.read = true;
+  await notification.save();
+
+  const populated = await Notification.findById(notification._id)
+    .populate("sender", "username email")
+    .populate("workspace", "name logoUrl");
+
+  if (populated) {
+    emitToUser(userId, "notification:updated", populated);
+    return populated;
+  }
+
+  return notification;
 };

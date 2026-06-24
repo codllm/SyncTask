@@ -24,6 +24,7 @@ export interface IUser extends Document, IUserMethods {
   createdAt: Date;
   updatedAt: Date;
   usertype: string;
+  demoSeeded?: boolean;
   phone?: number;
   notificationPreferences?: {
     comments: boolean;
@@ -46,6 +47,8 @@ export interface IUser extends Document, IUserMethods {
       sortOrder?: string;
     };
   }[];
+  pushTokens?: string[];
+  themeColor?: string;
 }
 
 //  Pass both IUser and the custom methods type to the Schema definition
@@ -139,6 +142,15 @@ const UserSchema = new Schema<IUser, {}, IUserMethods>({
       },
     },
   ],
+  pushTokens: [{ type: String }],
+  themeColor: {
+    type: String,
+    default: "#6366F1",
+  },
+  demoSeeded: {
+    type: Boolean,
+    default: false,
+  },
 }, {
   timestamps: true,
 });

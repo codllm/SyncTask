@@ -17,6 +17,12 @@ export interface Notification {
   message: string;
   link?: string;
   read: boolean;
+  inviteStatus?: "pending" | "accepted" | "declined";
+  workspace?: {
+    _id: string;
+    name: string;
+    logoUrl?: string;
+  };
   createdAt: string;
 }
 
@@ -37,5 +43,19 @@ export const markNotificationRead = async (
 
 export const markAllNotificationsRead = async (): Promise<{ success: boolean; message: string }> => {
   const res = await api.put("/api/notifications/read-all");
+  return res.data;
+};
+
+export const acceptWorkspaceInvite = async (
+  notificationId: string
+): Promise<{ success: boolean; notification: Notification }> => {
+  const res = await api.put(`/api/notifications/${notificationId}/accept`);
+  return res.data;
+};
+
+export const declineWorkspaceInvite = async (
+  notificationId: string
+): Promise<{ success: boolean; notification: Notification }> => {
+  const res = await api.put(`/api/notifications/${notificationId}/decline`);
   return res.data;
 };

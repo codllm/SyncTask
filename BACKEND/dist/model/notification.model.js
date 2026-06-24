@@ -75,6 +75,14 @@ const notificationSchema = new mongoose_1.Schema({
         type: String,
         trim: true,
     },
+    workspace: {
+        type: mongoose_1.Schema.Types.ObjectId,
+        ref: "Workspace",
+    },
+    inviteStatus: {
+        type: String,
+        enum: ["pending", "accepted", "declined"],
+    },
 }, {
     timestamps: true,
 });

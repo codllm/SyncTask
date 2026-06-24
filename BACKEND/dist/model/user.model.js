@@ -71,7 +71,7 @@ const UserSchema = new mongoose_1.Schema({
     },
     password: {
         type: String,
-        required: true,
+        required: false,
         minlength: 3,
     },
     age: {
@@ -80,12 +80,24 @@ const UserSchema = new mongoose_1.Schema({
     },
     gender: {
         type: String,
-        required: true,
+        required: false,
+        default: "not_specified",
     },
     usertype: {
         type: String,
         required: true,
-        enum: ["individual", "team", "admin"]
+        enum: ["individual", "team", "admin"],
+        default: "individual",
+    },
+    googleId: {
+        type: String,
+        unique: true,
+        sparse: true,
+    },
+    appleId: {
+        type: String,
+        unique: true,
+        sparse: true,
     },
     phone: {
         type: Number,
@@ -127,6 +139,15 @@ const UserSchema = new mongoose_1.Schema({
             },
         },
     ],
+    pushTokens: [{ type: String }],
+    themeColor: {
+        type: String,
+        default: "#6366F1",
+    },
+    demoSeeded: {
+        type: Boolean,
+        default: false,
+    },
 }, {
     timestamps: true,
 });
@@ -137,6 +158,8 @@ UserSchema.methods.hashPassword = function (password) {
 };
 UserSchema.methods.comparePassword = function (password) {
     return __awaiter(this, void 0, void 0, function* () {
+        if (!this.password)
+            return false;
         return yield bcrypt_1.default.compare(password, this.password);
     });
 };

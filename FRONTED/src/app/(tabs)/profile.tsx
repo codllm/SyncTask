@@ -33,7 +33,7 @@ const THEME_COLORS = [
 const SCREEN_HEIGHT = Dimensions.get("window").height;
 
 export default function ProfileScreen() {
-  const { user, setUser, logout, themeColor, setThemeColor, isDarkMode, setIsDarkMode, C } = useApp();
+  const { user, setUser, logout, themeColor, setThemeColor, isDarkMode, setIsDarkMode, C, todoMode, setTodoMode } = useApp();
 
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [firstname, setFirstname] = useState(user?.username?.firstname || "");
@@ -281,6 +281,21 @@ export default function ProfileScreen() {
             <Switch
               value={isDarkMode}
               onValueChange={setIsDarkMode}
+              trackColor={{ false: "#DEE2E6", true: themeColor }}
+              thumbColor={Platform.OS === "ios" ? undefined : "#fff"}
+            />
+          </View>
+
+          <View style={{ height: 0.5, backgroundColor: C.border, marginBottom: 14 }} />
+
+          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+            <View style={{ flex: 1, paddingRight: 10 }}>
+              <Text style={{ color: C.textPrimary, fontSize: 14, fontWeight: "600" }}>Simple To-Do Mode</Text>
+              <Text style={{ color: C.textMuted, fontSize: 11, marginTop: 2 }}>Use as a simplified task list without workspaces & projects</Text>
+            </View>
+            <Switch
+              value={todoMode}
+              onValueChange={setTodoMode}
               trackColor={{ false: "#DEE2E6", true: themeColor }}
               thumbColor={Platform.OS === "ios" ? undefined : "#fff"}
             />

@@ -4,6 +4,8 @@ import {
   getUserNotifications,
   markNotificationAsRead,
   markAllNotificationsAsRead,
+  acceptWorkspaceInvite,
+  declineWorkspaceInvite,
 } from "../services/notification.service";
 
 export const createNotificationController = async (req: Request, res: Response) => {
@@ -18,7 +20,7 @@ export const createNotificationController = async (req: Request, res: Response) 
 export const getNotificationsController = async (req: Request, res: Response) => {
   try {
     const user = (req as any).user;
-    const limit = parseInt(req.query.limit as string) || 20;
+    const limit = parseInt(req.query.limit as string) || 15;
     const page = parseInt(req.query.page as string) || 1;
     const type = req.query.type as string;
 
@@ -47,6 +49,30 @@ export const markAllAsReadController = async (req: Request, res: Response) => {
 
     const result = await markAllNotificationsAsRead(user._id);
     res.status(200).json({ success: true, result });
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+export const acceptWorkspaceInviteController = async (req: Request, res: Response) => {
+  try {
+    const user = (req as any).user;
+    const notificationId = req.params.notificationId as string;
+
+    const notification = await acceptWorkspaceInvite(notificationId, user._id.toString());
+    res.status(200).json({ success: true, notification });
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+export const declineWorkspaceInviteController = async (req: Request, res: Response) => {
+  try {
+    const user = (req as any).user;
+    const notificationId = req.params.notificationId as string;
+
+    const notification = await declineWorkspaceInvite(notificationId, user._id.toString());
+    res.status(200).json({ success: true, notification });
   } catch (error: any) {
     res.status(500).json({ success: false, message: error.message });
   }

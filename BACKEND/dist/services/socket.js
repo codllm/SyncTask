@@ -27,6 +27,11 @@ const initSocket = (server) => {
             socket.join(`project:${projectId}`);
             console.log(`Socket ${socket.id} joined project room: ${projectId}`);
         });
+        // User leaves a project room when switching projects
+        socket.on("leave-project-room", (projectId) => {
+            socket.leave(`project:${projectId}`);
+            console.log(`Socket ${socket.id} left project room: ${projectId}`);
+        });
         // Handle typing indicators
         socket.on("typing:start", (data) => {
             socket.to(`project:${data.projectId}`).emit("typing:started", data);

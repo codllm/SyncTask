@@ -11,7 +11,7 @@ import {
   Modal,
   Platform,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useApp } from "../../context/AppContext";
 import { getPinnedItemsApi } from "../../api/user.api";
 import {
@@ -22,7 +22,7 @@ import {
   deleteWorkspace,
   updateWorkspace,
 } from "../../api/workspace.api";
-import { getProjectTasks, Task } from "../../api/task.api";
+import { getProjectTasks, createTask, updateTask, deleteTask, Task } from "../../api/task.api";
 import { searchUsers, SearchUserResult, globalSearch } from "../../api/search.api";
 import { getWorkspaceActivities } from "../../api/activity.api";
 import { getWorkspaceAnalytics } from "../../api/project.api";
@@ -30,42 +30,66 @@ import { uploadFile } from "../../api/upload.api";
 import * as ImagePicker from "expo-image-picker";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import { TodoModeHomeView } from "../../Screen/TodoMode";
 
 // ─── Theme constants (all #15171C based) ─────────────────────────────────────
 const T = {
-  bg:          "#15171C",
-  card:        "#1D2027",
-  cardBorder:  "#21242C",
-  input:       "#21242C",
-  inputBorder: "#2A2D35",
-  divider:     "#21242C",
-  accent:      "#5865F2",
-  accentPress: "#4752C4",
-  onAccent:    "#FFFFFF",
-  textPrimary:   "#E2E4EA",
-  textSecondary: "#6B7280",
-  textMuted:     "#3D4049",
-  tagBg:   "#21242C",
-  tagText: "#6B7280",
-  // stat tints
-  greenBg:     "rgba(43,174,118,0.08)",
-  greenBorder: "rgba(43,174,118,0.16)",
-  greenText:   "#2BAE76",
-  purpleBg:    "rgba(88,101,242,0.08)",
-  purpleBorder:"rgba(88,101,242,0.16)",
-  purpleText:  "#5865F2",
-  redBg:       "rgba(240,71,71,0.08)",
-  redBorder:   "rgba(240,71,71,0.16)",
-  redText:     "#F04747",
-  amberText:   "#FAA61A",
-  dangerBg:    "rgba(240,71,71,0.08)",
-  dangerBorder:"rgba(240,71,71,0.16)",
-  danger:      "#F04747",
+  // Backgrounds
+  bg: "#0D1117",
+  card: "#161B22",
+  cardBorder: "#30363D",
+
+  // Inputs
+  input: "#161B22",
+  inputBorder: "#30363D",
+
+  // Dividers
+  divider: "#30363D",
+
+  // Accent
+  accent: "#5E6AD2",
+  accentPress: "#5260C7",
+  onAccent: "#FFFFFF",
+
+  // Typography
+  textPrimary: "#F0F6FC",
+  textSecondary: "#C9D1D9",
+  textMuted: "#8B949E",
+
+  // Tags
+  tagBg: "#1A1F28",
+  tagText: "#8B949E",
+
+  // Green stats
+  greenBg: "rgba(63,185,80,0.10)",
+  greenBorder: "rgba(63,185,80,0.22)",
+  greenText: "#3FB950",
+
+  // Purple stats
+  purpleBg: "rgba(94,106,210,0.10)",
+  purpleBorder: "rgba(94,106,210,0.22)",
+  purpleText: "#5E6AD2",
+
+  // Red stats
+  redBg: "rgba(248,81,73,0.10)",
+  redBorder: "rgba(248,81,73,0.22)",
+  redText: "#F85149",
+
+  // Amber stats
+  amberBg: "rgba(210,153,34,0.10)",
+  amberBorder: "rgba(210,153,34,0.22)",
+  amberText: "#D29922",
+
+  // Danger
+  dangerBg: "rgba(248,81,73,0.10)",
+  dangerBorder: "rgba(248,81,73,0.22)",
+  danger: "#F85149",
 };
 // ─────────────────────────────────────────────────────────────────────────────
 
 export default function HomeScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const {
     user,
     setUser,
@@ -79,9 +103,10 @@ export default function HomeScreen() {
     selectProject,
     isDarkMode,
     C,
+    todoMode,
+    setTodoMode,
   } = useApp();
 
-  const [dashboardMode, setDashboardMode] = useState<"workspace" | "personal">("workspace");
   const [stats, setStats] = useState({ total: 0, completed: 0, inProgress: 0 });
   const [loadingStats, setLoadingStats] = useState(false);
   const [analytics, setAnalytics] = useState<any>(null);
@@ -274,8 +299,12 @@ export default function HomeScreen() {
         setPinnedProjects(res.pinnedProjects || []);
         setPinnedTasks(res.pinnedTasks || []);
       }
-    } catch (err) {
-      console.error("Error loading pinned items:", err);
+    } catch (err: any) {
+      if (err?.response?.status === 401) {
+        console.warn("Session expired loading pinned items (401)");
+      } else {
+        console.error("Error loading pinned items:", err);
+      }
     } finally {
       setLoadingPinned(false);
     }
@@ -363,7 +392,7 @@ export default function HomeScreen() {
           try {
             const res = await addMemberToWorkspace(activeWorkspace._id, targetUserId);
             if (res.success) {
-              Alert.alert("Success", "User added to workspace successfully!");
+              Alert.alert("Success", "Workspace invitation sent successfully!");
               setSearchQuery("");
               setSearchResults([]);
               await refreshWorkspaces();
@@ -484,6 +513,10 @@ export default function HomeScreen() {
   );
   const canManage = isOwner || isAdmin;
 
+  if (todoMode) {
+    return <TodoModeHomeView />;
+  }
+
   // ─── Empty workspace state ──────────────────────────────────────────────────
   if (workspaces.length === 0) {
     return (
@@ -511,6 +544,13 @@ export default function HomeScreen() {
         >
           <Ionicons name="sparkles" size={16} color={T.onAccent} style={{ marginRight: 8 }} />
           <Text style={{ color: T.onAccent, fontWeight: "600", fontSize: 15 }}>Create Workspace</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          onPress={() => setTodoMode(true)}
+          activeOpacity={0.85}
+          style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 28, paddingVertical: 14, borderRadius: 16, marginTop: 12, backgroundColor: "transparent", borderWidth: 1, borderColor: T.divider }}
+        >
+          <Text style={{ color: T.textPrimary, fontWeight: "600", fontSize: 15 }}>Or use Simple To-Do Mode</Text>
         </TouchableOpacity>
       </SafeAreaView>
     );
@@ -583,21 +623,23 @@ export default function HomeScreen() {
         ════════════════════════════════════════════════════════════════════ */}
         {activeTab === "stats" ? (
           <>
-            {/* Workspace info card */}
-            <View style={{ flexDirection: "row", alignItems: "center", backgroundColor: T.card, borderWidth: 0.5, borderColor: T.cardBorder, borderRadius: 16, padding: 16, marginBottom: 20 }}>
-              {activeWorkspace?.logoUrl && (
-                <Image source={{ uri: activeWorkspace.logoUrl }} style={{ width: 44, height: 44, borderRadius: 10, marginRight: 14 }} />
-              )}
-              <View style={{ flex: 1 }}>
-                <Text style={{ fontSize: 10, fontWeight: "500", color: T.accent, textTransform: "uppercase", letterSpacing: 1, marginBottom: 3 }}>Workspace active</Text>
-                <Text style={{ fontSize: 20, fontWeight: "600", color: T.textPrimary }}>{activeWorkspace?.name}</Text>
-                {activeWorkspace?.description ? (
-                  <Text style={{ fontSize: 12, color: T.textSecondary, marginTop: 3, lineHeight: 18 }}>{activeWorkspace.description}</Text>
-                ) : null}
+            {/* Simple To-Do Mode card */}
+            <TouchableOpacity
+              onPress={() => setTodoMode(true)}
+              activeOpacity={0.8}
+              style={{ flexDirection: "row", alignItems: "center", backgroundColor: T.card, borderWidth: 0.5, borderColor: T.cardBorder, borderRadius: 16, padding: 16, marginBottom: 20 }}
+            >
+              <View style={{ width: 44, height: 44, borderRadius: 10, backgroundColor: `${T.accent}15`, alignItems: "center", justifyContent: "center", marginRight: 14 }}>
+                <Ionicons name="checkbox-outline" size={22} color={T.accent} />
               </View>
-            </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 10, fontWeight: "500", color: T.accent, textTransform: "uppercase", letterSpacing: 1, marginBottom: 3 }}>Personal checklist</Text>
+                <Text style={{ fontSize: 18, fontWeight: "600", color: T.textPrimary }}>To-Do Mode</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={16} color={T.textSecondary} style={{ opacity: 0.7 }} />
+            </TouchableOpacity>
 
-            {/* ── Pinned Items ── */}
+            {/* ── Pinned Items ──
             {(pinnedProjects.length > 0 || pinnedTasks.length > 0) && (
               <View style={{ marginBottom: 20 }}>
                 <Text style={{ fontSize: 15, fontWeight: "600", color: T.textPrimary, marginBottom: 14 }}>Pinned items</Text>
@@ -644,37 +686,19 @@ export default function HomeScreen() {
                   </View>
                 )}
               </View>
-            )}
+            )} */}
 
-            {/* ── Dashboard mode selector ── */}
-            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+            {/* ── Dashboard title ── */}
+            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
               <Text style={{ fontSize: 15, fontWeight: "600", color: T.textPrimary }}>
-                {dashboardMode === "workspace" ? "Workspace stats" : "Personal productivity"}
+                Workspace stats
               </Text>
-            </View>
-
-            <View style={{ flexDirection: "row", backgroundColor: T.card, borderWidth: 0.5, borderColor: T.cardBorder, borderRadius: 12, padding: 4, marginBottom: 16 }}>
-              {(["workspace", "personal"] as const).map((mode) => {
-                const isActive = dashboardMode === mode;
-                return (
-                  <TouchableOpacity
-                    key={mode}
-                    onPress={() => setDashboardMode(mode)}
-                    style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingVertical: 9, borderRadius: 9, backgroundColor: isActive ? T.accent : "transparent" }}
-                  >
-                    <Text style={{ fontSize: 11, fontWeight: "500", color: isActive ? T.onAccent : T.textSecondary, textTransform: "uppercase", letterSpacing: 0.5 }}>
-                      {mode === "workspace" ? "Workspace view" : "Personal stats"}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
             </View>
 
             {/* ── Stats cards ── */}
             {loadingStats ? (
               <ActivityIndicator size="large" color={T.accent} style={{ marginVertical: 32 }} />
-            ) : dashboardMode === "workspace" ? (
-
+            ) : (
               /* ── Workspace stats ── */
               <View style={{ marginBottom: 20 }}>
                 <View style={{ flexDirection: "row", gap: 10, marginBottom: 10 }}>
@@ -717,67 +741,6 @@ export default function HomeScreen() {
                       </View>
                     );
                   })()}
-                </View>
-              </View>
-
-            ) : (
-
-              /* ── Personal stats ── */
-              <View style={{ marginBottom: 20 }}>
-                <View style={{ flexDirection: "row", gap: 10, marginBottom: 10 }}>
-                  {/* Assigned */}
-                  <View style={{ flex: 1, backgroundColor: T.card, borderWidth: 0.5, borderColor: T.cardBorder, borderRadius: 16, padding: 14, minHeight: 112 }}>
-                    <Ionicons name="person-outline" size={22} color={T.accent} />
-                    <View style={{ marginTop: 10 }}>
-                      <Text style={{ fontSize: 9, fontWeight: "500", textTransform: "uppercase", letterSpacing: 1, color: T.textSecondary }}>Assigned to me</Text>
-                      <Text style={{ fontSize: 26, fontWeight: "600", color: T.textPrimary, marginTop: 3 }}>{analytics?.personal?.total ?? 0}</Text>
-                    </View>
-                  </View>
-                  {/* My completed */}
-                  <View style={{ flex: 1, backgroundColor: T.greenBg, borderWidth: 0.5, borderColor: T.greenBorder, borderRadius: 16, padding: 14, minHeight: 112 }}>
-                    <Ionicons name="checkmark-done-circle-outline" size={22} color={T.greenText} />
-                    <View style={{ marginTop: 10 }}>
-                      <Text style={{ fontSize: 9, fontWeight: "500", textTransform: "uppercase", letterSpacing: 1, color: T.greenText }}>My completed</Text>
-                      <Text style={{ fontSize: 26, fontWeight: "600", color: T.textPrimary, marginTop: 3 }}>{analytics?.personal?.completed ?? 0}</Text>
-                    </View>
-                  </View>
-                </View>
-                <View style={{ flexDirection: "row", gap: 10, marginBottom: 10 }}>
-                  {/* Done this week */}
-                  <View style={{ flex: 1, backgroundColor: T.purpleBg, borderWidth: 0.5, borderColor: T.purpleBorder, borderRadius: 16, padding: 14, minHeight: 112 }}>
-                    <Ionicons name="calendar-outline" size={22} color={T.purpleText} />
-                    <View style={{ marginTop: 10 }}>
-                      <Text style={{ fontSize: 9, fontWeight: "500", textTransform: "uppercase", letterSpacing: 1, color: T.purpleText }}>Done this week</Text>
-                      <Text style={{ fontSize: 26, fontWeight: "600", color: T.textPrimary, marginTop: 3 }}>{analytics?.personal?.completedThisWeek ?? 0}</Text>
-                    </View>
-                  </View>
-                  {/* My overdue */}
-                  {(() => {
-                    const overdue = analytics?.personal?.overdue ?? 0;
-                    return (
-                      <View style={{ flex: 1, backgroundColor: overdue > 0 ? T.redBg : "rgba(250,166,26,0.08)", borderWidth: 0.5, borderColor: overdue > 0 ? T.redBorder : "rgba(250,166,26,0.16)", borderRadius: 16, padding: 14, minHeight: 112 }}>
-                        <Ionicons name="alert-circle-outline" size={22} color={overdue > 0 ? T.redText : T.amberText} />
-                        <View style={{ marginTop: 10 }}>
-                          <Text style={{ fontSize: 9, fontWeight: "500", textTransform: "uppercase", letterSpacing: 1, color: overdue > 0 ? T.redText : T.amberText }}>My overdue</Text>
-                          <Text style={{ fontSize: 26, fontWeight: "600", color: overdue > 0 ? T.redText : T.textPrimary, marginTop: 3 }}>{overdue}</Text>
-                        </View>
-                      </View>
-                    );
-                  })()}
-                </View>
-
-                {/* Completion rate bar */}
-                <View style={{ backgroundColor: T.card, borderWidth: 0.5, borderColor: T.cardBorder, borderRadius: 16, padding: 16, marginBottom: 2 }}>
-                  <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-                    <View>
-                      <Text style={{ fontSize: 13, fontWeight: "500", color: T.textPrimary }}>Completion rate</Text>
-                      <Text style={{ fontSize: 11, color: T.textSecondary, marginTop: 2 }}>Ratio of completed assigned tasks</Text>
-                    </View>
-                    <Text style={{ fontSize: 26, fontWeight: "600", color: T.accent }}>{analytics?.personal?.completionRate ?? 0}%</Text>
-                  </View>
-                  <View style={{ height: 5, backgroundColor: T.input, borderRadius: 3, overflow: "hidden" }}>
-                    <View style={{ height: "100%", borderRadius: 3, backgroundColor: T.accent, width: `${analytics?.personal?.completionRate ?? 0}%` as any }} />
-                  </View>
                 </View>
               </View>
             )}
@@ -1040,8 +1003,16 @@ export default function HomeScreen() {
           MODAL — Global Search
       ════════════════════════════════════════════════════════════════════ */}
       <Modal visible={searchModalVisible} transparent animationType="slide" onRequestClose={() => setSearchModalVisible(false)}>
-        <SafeAreaView style={{ flex: 1, backgroundColor: T.bg }}>
-          <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 14, paddingVertical: 10, borderBottomWidth: 0.5, borderBottomColor: T.divider }}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: T.bg }} edges={["bottom", "left", "right"]}>
+          <View style={{ 
+            flexDirection: "row", 
+            alignItems: "center", 
+            paddingHorizontal: 14, 
+            paddingTop: Math.max(insets.top, 12), 
+            paddingBottom: 12, 
+            borderBottomWidth: 0.5, 
+            borderBottomColor: T.divider 
+          }}>
             <TouchableOpacity onPress={() => { setSearchModalVisible(false); setGlobalQuery(""); setGlobalResults(null); }} style={{ marginRight: 10, padding: 4 }}>
               <Ionicons name="arrow-back" size={22} color={T.textPrimary} />
             </TouchableOpacity>

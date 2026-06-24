@@ -1,9 +1,10 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import * as storage from "../utils/storage";
-import { getProfileApi } from "../api/user.api";
-import { getUserWorkspace, Workspace } from "../api/workspace.api";
-import { getWorkspaceProjects, Project } from "../api/project.api";
+import { getProfileApi, updateThemeColorApi } from "../api/user.api";
+import { getUserWorkspace, Workspace, createWorkspace } from "../api/workspace.api";
+import { getWorkspaceProjects, Project, createProject } from "../api/project.api";
 import { getNotifications } from "../api/notification.api";
+import { Todo, getTodos, createTodo, updateTodo, deleteTodo } from "../api/todo.api";
 
 interface AppContextType {
   user: any | null;
@@ -26,6 +27,16 @@ interface AppContextType {
   isDarkMode: boolean;
   setIsDarkMode: (val: boolean) => Promise<void>;
   C: any;
+  todoMode: boolean;
+  setTodoMode: (enabled: boolean) => Promise<void>;
+  
+  // Simple Todo Actions
+  todoTasks: Todo[];
+  fetchTodoTasks: () => Promise<void>;
+  addTodoTask: (title: string) => Promise<void>;
+  toggleTodoTask: (todo: Todo) => Promise<void>;
+  deleteTodoTask: (todoId: string) => Promise<void>;
+  updateTodoTask: (todoId: string, updates: { title?: string; description?: string; priority?: "low" | "medium" | "high" }) => Promise<void>;
   
   // Handlers
   refreshData: () => Promise<void>;
@@ -48,33 +59,50 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [activeProject, setActiveProject] = useState<Project | null>(null);
   const [unreadCount, setUnreadCount] = useState<number>(0);
   const [loading, setLoading] = useState<boolean>(true);
-  const [themeColor, setThemeColorState] = useState<string>("#5865F2");
+  const [themeColor, setThemeColorState] = useState<string>("#6366F1");
   const [isDarkMode, setIsDarkModeState] = useState<boolean>(true);
+  const [todoMode, setTodoModeState] = useState<boolean>(false);
+  const [todoTasks, setTodoTasks] = useState<Todo[]>([]);
   // ── NEW: flips to true only after SecureStore bootstrap finishes,
   //         so refreshData never fires before the token is loaded.
   const [tokenReady, setTokenReady] = useState<boolean>(false);
 
   // Themes
   const darkTheme = {
-    bg: "#15171C",
-    card: "#1D2027",
-    cardBorder: "#21242C",
-    border: "#21242C",
-    cardUnread: "#1E222A",
-    divider: "#21242C",
-    input: "#1D2027",
-    inputBorder: "#2A2D35",
-    textPrimary: "#E2E4EA",
-    textSecondary: "#6B7280",
-    textMuted: "#3D4049",
-    textLabel: "#6B7280",
-    accent: "#5865F2",
-    onAccent: "#E2E4EA",
-    danger: "#F04747",
-    dangerBg: "rgba(240, 71, 71, 0.07)",
-    dangerBorder: "rgba(240, 71, 71, 0.15)",
-    tagBg: "#21242C",
-    tagText: "#6B7280",
+    // Backgrounds
+    bg: "#0D1117",          // Main background
+    card: "#161B22",        // Card background
+    cardBorder: "#30363D",
+    border: "#30363D",
+    borderSubtle: "#242A32",
+    cardUnread: "#1A1F28",
+    divider: "#21262D",
+  
+    // Inputs
+    input: "#161B22",
+    inputBorder: "#30363D",
+  
+    // Text
+    textPrimary: "#F0F6FC",     // Main white
+    textSecondary: "#C9D1D9",   // Secondary text
+    textMuted: "#8B949E",       // Descriptions / labels
+    textLabel: "#A5B0BB",
+    tagText: "#8B949E",
+  
+    // Accent
+    accent: "#6366F1",          // Linear purple
+    onAccent: "#FFFFFF",
+  
+    // Status
+    success: "#3FB950",
+    warning: "#D29922",
+    danger: "#F85149",
+  
+    dangerBg: "rgba(248,81,73,0.08)",
+    dangerBorder: "rgba(248,81,73,0.18)",
+  
+    // Tags
+    tagBg: "#21262D",
   };
 
   const lightTheme = {
@@ -90,7 +118,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     textSecondary: "#495057",
     textMuted: "#868E96",
     textLabel: "#7A86A0",
-    accent: "#6FC3D6",
+    accent: "#6366F1",
     onAccent: "#0D2A30",
     danger: "#FA5252",
     dangerBg: "rgba(250,82,82,0.1)",
@@ -106,6 +134,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setUserState(u);
     if (u) {
       await storage.setItemAsync("User", JSON.stringify(u));
+      if (u.themeColor) {
+        setThemeColorState(u.themeColor);
+        await storage.setItemAsync("themeColor", u.themeColor);
+      }
     } else {
       await storage.deleteItemAsync("User");
     }
@@ -123,6 +155,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const setThemeColor = async (color: string) => {
     setThemeColorState(color);
     await storage.setItemAsync("themeColor", color);
+    try {
+      const storedToken = await storage.getItemAsync("token");
+      if (storedToken) {
+        await updateThemeColorApi(color);
+      }
+    } catch (err) {
+      console.error("Failed to sync themeColor with backend:", err);
+    }
   };
 
   const setIsDarkMode = async (val: boolean) => {
@@ -138,6 +178,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         const storedUser = await storage.getItemAsync("User");
         const storedTheme = await storage.getItemAsync("themeColor");
         const storedDarkMode = await storage.getItemAsync("isDarkMode");
+        const storedTodoMode = await storage.getItemAsync("todoMode");
         
         if (storedDarkMode) {
           setIsDarkModeState(storedDarkMode === "true");
@@ -145,6 +186,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
         
         if (storedTheme) {
           setThemeColorState(storedTheme);
+        }
+
+        if (storedTodoMode) {
+          setTodoModeState(storedTodoMode === "true");
         }
         
         if (storedToken) {
@@ -169,29 +214,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     })();
   }, []);
 
-  // ── CHANGED: depend on tokenReady so this never fires before
-  //    SecureStore has been read and the token set in state.
-  useEffect(() => {
-    if (!tokenReady) return;
-    if (user && token) {
-      refreshData();
-    } else {
-      setWorkspaces([]);
-      setActiveWorkspaceState(null);
-      setProjects([]);
-      setActiveProject(null);
-      setUnreadCount(0);
-    }
-  }, [user, token, tokenReady]);
-
-  const refreshData = async () => {
-    if (!user) return;
-    await Promise.all([
-      refreshWorkspaces(),
-      refreshNotifications()
-    ]);
-  };
-
   const refreshWorkspaces = async () => {
     if (!user) return;
     try {
@@ -199,6 +221,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (res.success) {
         setWorkspaces(res.workspaces);
         
+
         // Auto-select active workspace if not set or doesn't exist in new list
         if (res.workspaces.length > 0) {
           const currentActiveExists = activeWorkspace && res.workspaces.some((w: Workspace) => w._id === activeWorkspace._id);
@@ -216,9 +239,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
         }
       }
     } catch (err: any) {
-      console.error("AppContext: error fetching workspaces:", err);
       if (err?.response?.status === 401) {
+        console.warn("AppContext: session expired (401), logging out...");
         await logout();
+      } else {
+        console.error("AppContext: error fetching workspaces:", err);
       }
     }
   };
@@ -242,20 +267,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
             const updatedActive = res.projects.find(p => p._id === activeProject?._id);
             if (updatedActive) {
               setActiveProject(updatedActive);
-              if (updatedActive.color) setThemeColorState(updatedActive.color);
             }
           } else {
             setActiveProject(res.projects[0]);
-            if (res.projects[0].color) setThemeColorState(res.projects[0].color);
           }
         } else {
           setActiveProject(null);
         }
       }
     } catch (err: any) {
-      console.error("AppContext: error fetching projects:", err);
       if (err?.response?.status === 401) {
         await logout();
+      } else {
+        console.error("AppContext: error fetching projects:", err);
       }
     }
   };
@@ -268,18 +292,102 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setUnreadCount(unread);
       }
     } catch (err: any) {
-      console.error("AppContext: error fetching notifications:", err);
       if (err?.response?.status === 401) {
         await logout();
+      } else {
+        console.error("AppContext: error fetching notifications:", err);
       }
     }
   };
+
+  const fetchTodoTasks = async () => {
+    try {
+      const res = await getTodos();
+      if (res.success) {
+        setTodoTasks(res.todos);
+      }
+    } catch (err) {
+      console.error("AppContext: error fetching todos:", err);
+    }
+  };
+
+  const addTodoTask = async (title: string) => {
+    try {
+      const res = await createTodo({ title });
+      if (res.success) {
+        setTodoTasks(prev => [res.todo, ...prev]);
+      }
+    } catch (err) {
+      console.error("AppContext: error creating todo:", err);
+      throw err;
+    }
+  };
+
+  const toggleTodoTask = async (todo: Todo) => {
+    const nextStatus = todo.status === "completed" ? "todo" : "completed";
+    setTodoTasks(prev => prev.map(t => t._id === todo._id ? { ...t, status: nextStatus } : t));
+    try {
+      await updateTodo(todo._id, { status: nextStatus });
+    } catch (err) {
+      console.error("AppContext: error toggling todo:", err);
+      setTodoTasks(prev => prev.map(t => t._id === todo._id ? todo : t));
+      throw err;
+    }
+  };
+
+  const deleteTodoTask = async (todoId: string) => {
+    const original = [...todoTasks];
+    setTodoTasks(prev => prev.filter(t => t._id !== todoId));
+    try {
+      await deleteTodo(todoId);
+    } catch (err) {
+      console.error("AppContext: error deleting todo:", err);
+      setTodoTasks(original);
+      throw err;
+    }
+  };
+
+  const updateTodoTask = async (todoId: string, updates: { title?: string; description?: string; priority?: "low" | "medium" | "high" }) => {
+    try {
+      const res = await updateTodo(todoId, updates);
+      if (res.success) {
+        setTodoTasks(prev => prev.map(t => t._id === todoId ? res.todo : t));
+      }
+    } catch (err) {
+      console.error("AppContext: error updating todo details:", err);
+      throw err;
+    }
+  };
+
+  const refreshData = async () => {
+    if (!user) return;
+    await Promise.all([
+      refreshWorkspaces(),
+      refreshNotifications(),
+      fetchTodoTasks()
+    ]);
+  };
+
+  // ── CHANGED: depend on tokenReady so this never fires before
+  //    SecureStore has been read and the token set in state.
+  useEffect(() => {
+    if (!tokenReady) return;
+    if (user && token) {
+      refreshData();
+    } else {
+      setWorkspaces([]);
+      setActiveWorkspaceState(null);
+      setProjects([]);
+      setActiveProject(null);
+      setUnreadCount(0);
+    }
+  }, [user, token, tokenReady]);
 
   const selectWorkspace = async (workspace: Workspace | null) => {
     setActiveWorkspaceState(workspace);
     setActiveProject(null);
     const storedTheme = await storage.getItemAsync("themeColor");
-    setThemeColorState(storedTheme || "#5865F2");
+    setThemeColorState(storedTheme || "#6366F1");
     if (workspace) {
       await refreshProjects(workspace._id);
     } else {
@@ -289,13 +397,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const selectProject = (project: Project | null) => {
     setActiveProject(project);
-    if (project && project.color) {
-      setThemeColorState(project.color);
-    } else {
-      storage.getItemAsync("themeColor").then((storedTheme) => {
-        setThemeColorState(storedTheme || "#5865F2");
-      });
-    }
+    storage.getItemAsync("themeColor").then((storedTheme) => {
+      setThemeColorState(storedTheme || "#6366F1");
+    });
+  };
+
+
+  const setTodoMode = async (enabled: boolean) => {
+    setTodoModeState(enabled);
+    await storage.setItemAsync("todoMode", enabled ? "true" : "false");
   };
 
   const logout = async () => {
@@ -313,6 +423,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setProjects([]);
       setActiveProject(null);
       setUnreadCount(0);
+      setTodoTasks([]);
     }
   };
 
@@ -339,6 +450,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
         isDarkMode,
         setIsDarkMode,
         C,
+        todoMode,
+        setTodoMode,
+        todoTasks,
+        fetchTodoTasks,
+        addTodoTask,
+        toggleTodoTask,
+        deleteTodoTask,
+        updateTodoTask,
         refreshData,
         refreshWorkspaces,
         refreshProjects,

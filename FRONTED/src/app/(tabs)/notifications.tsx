@@ -12,32 +12,45 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useApp } from "../../context/AppContext";
+import { useSocket } from "../../context/SocketContext";
 import { useRouter } from "expo-router";
 import {
   getNotifications,
   markNotificationRead,
   markAllNotificationsRead,
   Notification,
+  acceptWorkspaceInvite,
+  declineWorkspaceInvite,
 } from "../../api/notification.api";
 
 // ─── Theme (matches Home / Tasks screens) ──────────────────────────────────────
 const T = {
-  bg:            "#15171C",
-  surface:       "#1D2027",
-  card:          "#22252E",
-  cardUnread:    "#1B2030",
-  border:        "#2A2D38",
-  borderLight:   "#333748",
-  textPrimary:   "#ffffff",
-  textSecondary: "#ffffff",
-  textMuted:     "#ffffff",
-  accent:        "#5865F2",
-  accentBg:      "rgba(88,101,242,0.12)",
-  accentText:    "#ffffff",
-  danger:        "#F04747",
-  dangerBg:      "rgba(240,71,71,0.08)",
-  dangerBorder:  "rgba(240,71,71,0.18)",
-  green:         "#2BAE76",
+  // Backgrounds
+  bg: "#0D1117",
+  surface: "#161B22",
+  card: "#161B22",
+  cardUnread: "#1A1F28",
+
+  // Borders
+  border: "#30363D",
+  borderLight: "#3A424D",
+
+  // Typography
+  textPrimary: "#F0F6FC",
+  textSecondary: "#C9D1D9",
+  textMuted: "#8B949E",
+
+  // Accent
+  accent: "#5E6AD2",
+  accentBg: "rgba(94,106,210,0.12)",
+  accentText: "#FFFFFF",
+
+  // Status colors
+  danger: "#F85149",
+  dangerBg: "rgba(248,81,73,0.08)",
+  dangerBorder: "rgba(248,81,73,0.18)",
+
+  green: "#3FB950",
 };
 
 // ─── Notification type config (recolored to theme palette) ───────────────────
@@ -61,14 +74,80 @@ const FILTERS = [
 
 export default function NotificationsScreen() {
   const router = useRouter();
-  const { refreshNotifications: updateGlobalUnread, themeColor, projects, selectProject } = useApp();
+  const { refreshNotifications: updateGlobalUnread, themeColor, projects, selectProject, refreshWorkspaces } = useApp();
+  const { socket } = useSocket();
 
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading]     = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [activeFilter, setActiveFilter] = useState("all");
 
+  const handleAcceptInvite = async (notificationId: string) => {
+    try {
+      const res = await acceptWorkspaceInvite(notificationId);
+      if (res.success) {
+        setNotifications((prev) =>
+          prev.map((n) => (n._id === notificationId ? res.notification : n))
+        );
+        await refreshWorkspaces();
+        await updateGlobalUnread();
+        Alert.alert("Success", "Workspace invitation accepted!");
+      }
+    } catch (err: any) {
+      console.error(err);
+      Alert.alert("Error", err?.response?.data?.message || "Failed to accept invitation");
+    }
+  };
+
+  const handleDeclineInvite = async (notificationId: string) => {
+    try {
+      const res = await declineWorkspaceInvite(notificationId);
+      if (res.success) {
+        setNotifications((prev) =>
+          prev.map((n) => (n._id === notificationId ? res.notification : n))
+        );
+        await refreshWorkspaces();
+        await updateGlobalUnread();
+        Alert.alert("Declined", "Workspace invitation declined.");
+      }
+    } catch (err: any) {
+      console.error(err);
+      Alert.alert("Error", err?.response?.data?.message || "Failed to decline invitation");
+    }
+  };
+
   useEffect(() => { loadNotifications(); }, []);
+
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleNotification = (newNotification: Notification) => {
+      setNotifications((prev) => [newNotification, ...prev]);
+      updateGlobalUnread();
+    };
+
+    const handleNotificationUpdate = (updatedNotification: Notification) => {
+      setNotifications((prev) =>
+        prev.map((n) => (n._id === updatedNotification._id ? updatedNotification : n))
+      );
+      updateGlobalUnread();
+    };
+
+    const handleNotificationsReadAll = () => {
+      setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+      updateGlobalUnread();
+    };
+
+    socket.on("notification:received", handleNotification);
+    socket.on("notification:updated", handleNotificationUpdate);
+    socket.on("notifications:read-all", handleNotificationsReadAll);
+
+    return () => {
+      socket.off("notification:received", handleNotification);
+      socket.off("notification:updated", handleNotificationUpdate);
+      socket.off("notifications:read-all", handleNotificationsReadAll);
+    };
+  }, [socket, updateGlobalUnread]);
 
   const loadNotifications = async () => {
     setLoading(true);
@@ -183,9 +262,6 @@ export default function NotificationsScreen() {
         }}
       >
         <View style={{ flex: 1 }}>
-          <Text style={{ fontSize: 10, fontWeight: "500", color: T.textMuted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 2 }}>
-            Activity
-          </Text>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
             <Text style={{ color: T.textPrimary, fontSize: 20, fontWeight: "600" }}>Notifications</Text>
             {unreadCount > 0 && (
@@ -305,6 +381,8 @@ export default function NotificationsScreen() {
                   e.stopPropagation();
                   handleMarkRead(item);
                 }}
+                onAcceptInvite={handleAcceptInvite}
+                onDeclineInvite={handleDeclineInvite}
                 isLast={index === filteredNotifications.length - 1}
               />
             ))
@@ -322,6 +400,8 @@ function NotificationCard({
   formatTime,
   onPress,
   onMarkRead,
+  onAcceptInvite,
+  onDeclineInvite,
   isLast,
 }: {
   item: Notification;
@@ -329,6 +409,8 @@ function NotificationCard({
   formatTime: (d: string) => string;
   onPress: () => void;
   onMarkRead: (e: any) => void;
+  onAcceptInvite: (notificationId: string) => void;
+  onDeclineInvite: (notificationId: string) => void;
   isLast: boolean;
 }) {
   const config = TYPE_CONFIG[item.type] ?? DEFAULT_TYPE;
@@ -405,6 +487,62 @@ function NotificationCard({
           <Text style={{ color: T.textMuted, fontSize: 12, lineHeight: 18 }} numberOfLines={3}>
             {item.message}
           </Text>
+
+          {/* Invite actions / status */}
+          {item.type === "WORKSPACE_INVITE" && (() => {
+            const status = item.inviteStatus || "pending";
+            if (status === "pending") {
+              return (
+                <View style={{ flexDirection: "row", gap: 10, marginTop: 12 }}>
+                  <TouchableOpacity
+                    onPress={() => onAcceptInvite(item._id)}
+                    activeOpacity={0.8}
+                    style={{
+                      backgroundColor: T.accent,
+                      paddingVertical: 7,
+                      paddingHorizontal: 15,
+                      borderRadius: 8,
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    <Text style={{ color: "#fff", fontSize: 12, fontWeight: "600" }}>Confirm</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={() => onDeclineInvite(item._id)}
+                    activeOpacity={0.8}
+                    style={{
+                      backgroundColor: T.surface,
+                      borderWidth: 0.5,
+                      borderColor: T.border,
+                      paddingVertical: 7,
+                      paddingHorizontal: 15,
+                      borderRadius: 8,
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    <Text style={{ color: T.textSecondary, fontSize: 12, fontWeight: "600" }}>Ignore</Text>
+                  </TouchableOpacity>
+                </View>
+              );
+            } else if (status === "accepted") {
+              return (
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginTop: 10 }}>
+                  <Ionicons name="checkmark-circle-outline" size={14} color={T.green} />
+                  <Text style={{ color: T.green, fontSize: 11, fontWeight: "600" }}>Joined Workspace</Text>
+                </View>
+              );
+            } else if (status === "declined") {
+              return (
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginTop: 10 }}>
+                  <Ionicons name="close-circle-outline" size={14} color={T.danger} />
+                  <Text style={{ color: T.danger, fontSize: 11, fontWeight: "600" }}>Invitation Declined</Text>
+                </View>
+              );
+            }
+            return null;
+          })()}
 
           {/* New pill */}
           {!item.read && (

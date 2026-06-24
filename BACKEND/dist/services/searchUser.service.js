@@ -42,7 +42,12 @@ const searchWorkspacesService = (query, userId) => __awaiter(void 0, void 0, voi
         return yield workspace_model_1.default
             .find({
             name: { $regex: query, $options: "i" },
-            "members.user": new mongoose_1.default.Types.ObjectId(userId),
+            members: {
+                $elemMatch: {
+                    user: new mongoose_1.default.Types.ObjectId(userId),
+                    status: { $ne: "pending" }
+                }
+            }
         })
             .select("name description")
             .limit(10);

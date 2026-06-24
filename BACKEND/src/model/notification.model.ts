@@ -8,6 +8,8 @@ export interface INotification extends Document {
   message: string;
   read: boolean;
   link?: string;
+  workspace?: mongoose.Types.ObjectId;
+  inviteStatus?: "pending" | "accepted" | "declined";
   createdAt: Date;
   updatedAt: Date;
 }
@@ -53,6 +55,14 @@ const notificationSchema = new Schema<INotification>(
     link: {
       type: String,
       trim: true,
+    },
+    workspace: {
+      type: Schema.Types.ObjectId,
+      ref: "Workspace",
+    },
+    inviteStatus: {
+      type: String,
+      enum: ["pending", "accepted", "declined"],
     },
   },
   {

@@ -3,6 +3,7 @@ import mongoose, { Schema, Document } from "mongoose";
 export interface IWorkspaceMember {
   user: mongoose.Types.ObjectId;
   role: "owner" | "admin" | "member" | "viewer";
+  status: "joined" | "pending";
 }
 
 export interface IWorkspace extends Document {
@@ -47,6 +48,12 @@ const workspaceSchema = new Schema<IWorkspace>(
           type: String,
           enum: ["owner", "admin", "member", "viewer"],
           default: "member",
+        },
+
+        status: {
+          type: String,
+          enum: ["joined", "pending"],
+          default: "joined",
         },
       },
     ],

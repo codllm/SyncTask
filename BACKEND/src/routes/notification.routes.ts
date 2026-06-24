@@ -5,6 +5,8 @@ import {
   getNotificationsController,
   markAsReadController,
   markAllAsReadController,
+  acceptWorkspaceInviteController,
+  declineWorkspaceInviteController,
 } from "../controllers/notification.controller";
 
 const router = Router();
@@ -21,6 +23,10 @@ router.get("/comment-added", userauth, (req, res) => { req.query.type = "COMMENT
 
 // Create a new notification manually
 router.post("/create", userauth, createNotificationController);
+
+// Accept/decline workspace invite
+router.put("/:notificationId/accept", userauth, acceptWorkspaceInviteController);
+router.put("/:notificationId/decline", userauth, declineWorkspaceInviteController);
 
 // Mark specific notification as read
 router.put("/:notificationId/read", userauth, markAsReadController);

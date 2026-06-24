@@ -76,8 +76,8 @@ export interface CreateTaskPayload {
   project: string;
   priority: "low" | "medium" | "high";
   status?: string;
-  dueDate?: string;
-  startDate?: string;
+  dueDate?: string | null;
+  startDate?: string | null;
   assignedTo?: string | string[];
   labels?: string[];
   dependencies?: string[];
@@ -94,8 +94,8 @@ export interface UpdateTaskPayload {
   description?: string;
   priority?: "low" | "medium" | "high";
   status?: string;
-  dueDate?: string;
-  startDate?: string;
+  dueDate?: string | null;
+  startDate?: string | null;
   assignedTo?: string | string[];
   subtasks?: SubTask[];
   newAttachments?: Attachment[];

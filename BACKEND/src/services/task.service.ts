@@ -352,28 +352,37 @@ export const deleteTaskService = async (
 ) => {
   const task = await TaskModel.findById(taskId);
   if (task) {
-    // Shift subsequent tasks in the same status down
-    await TaskModel.updateMany(
-      { project: task.project, status: task.status, position: { $gt: task.position } },
-      { $inc: { position: -1 } }
-    );
+    const positionVal = typeof task.position === "number" ? task.position : 0;
     
-    const project = await ProjectModel.findById(task.project);
-    if (project && userId) {
-      await createActivityLog({
-        workspace: project.workspace.toString(),
-        project: project._id.toString(),
-        task: task._id.toString(),
-        user: userId,
-        action: "task_deleted",
-        details: `deleted task "${task.title}"`,
-      });
+    // Shift subsequent tasks in the same status down
+    if (task.project) {
+      await TaskModel.updateMany(
+        { project: task.project, status: task.status, position: { $gt: positionVal } },
+        { $inc: { position: -1 } }
+      );
+    }
+    
+    if (task.project) {
+      const project = await ProjectModel.findById(task.project);
+      if (project && userId && project.workspace) {
+        await createActivityLog({
+          workspace: project.workspace.toString(),
+          project: project._id.toString(),
+          task: task._id.toString(),
+          user: userId,
+          action: "task_deleted",
+          details: `deleted task "${task.title}"`,
+        });
+      }
     }
 
     task.isDeleted = true;
     task.deletedAt = new Date();
     await task.save();
-    emitToProject(task.project.toString(), "task:deleted", { taskId });
+    
+    if (task.project) {
+      emitToProject(task.project.toString(), "task:deleted", { taskId });
+    }
   }
 
   return task;

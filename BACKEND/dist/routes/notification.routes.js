@@ -14,6 +14,9 @@ router.get("/workspace-invite", auth_middleware_1.userauth, (req, res) => { req.
 router.get("/comment-added", auth_middleware_1.userauth, (req, res) => { req.query.type = "COMMENT_ADDED"; return (0, notification_controller_1.getNotificationsController)(req, res); });
 // Create a new notification manually
 router.post("/create", auth_middleware_1.userauth, notification_controller_1.createNotificationController);
+// Accept/decline workspace invite
+router.put("/:notificationId/accept", auth_middleware_1.userauth, notification_controller_1.acceptWorkspaceInviteController);
+router.put("/:notificationId/decline", auth_middleware_1.userauth, notification_controller_1.declineWorkspaceInviteController);
 // Mark specific notification as read
 router.put("/:notificationId/read", auth_middleware_1.userauth, notification_controller_1.markAsReadController);
 // Mark all as read

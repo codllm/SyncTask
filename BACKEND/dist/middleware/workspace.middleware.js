@@ -45,7 +45,7 @@ const isWorkspaceAdmin = (req, res, next) => __awaiter(void 0, void 0, void 0, f
         }
         const member = workspace.members.find((member) => member.user.toString() ===
             user._id.toString());
-        if (!member) {
+        if (!member || member.status === "pending") {
             return res.status(403).json({
                 success: false,
                 message: "Access denied",
@@ -116,7 +116,13 @@ const blockViewers = (req, res, next) => __awaiter(void 0, void 0, void 0, funct
             const workspace = yield Workspace.findById(workspaceId);
             if (workspace) {
                 const workspaceMember = workspace.members.find((m) => m.user.toString() === userId);
-                if (workspaceMember && workspaceMember.role === "viewer") {
+                if (!workspaceMember || workspaceMember.status === "pending") {
+                    return res.status(403).json({
+                        success: false,
+                        message: "Access denied",
+                    });
+                }
+                if (workspaceMember.role === "viewer") {
                     return res.status(403).json({
                         success: false,
                         message: "Action forbidden: View-only role in workspace",

@@ -529,3 +529,71 @@ export const appleAuth = async (req: Request, res: Response) => {
     return res.status(500).json({ success: false, message: error.message || "Internal server error" });
   }
 };
+
+export const registerPushTokenController = async (req: Request, res: Response) => {
+  try {
+    const user = (req as any).user;
+    const { pushToken } = req.body;
+
+    if (!pushToken) {
+      return res.status(400).json({ success: false, message: "Push token is required" });
+    }
+
+    if (!user.pushTokens) {
+      user.pushTokens = [];
+    }
+
+    if (!user.pushTokens.includes(pushToken)) {
+      user.pushTokens.push(pushToken);
+      await user.save();
+    }
+
+    return res.status(200).json({ success: true, message: "Push token registered successfully" });
+  } catch (error: any) {
+    console.error("Register Push Token Error:", error);
+    return res.status(500).json({ success: false, message: error.message || "Internal server error" });
+  }
+};
+
+export const removePushTokenController = async (req: Request, res: Response) => {
+  try {
+    const user = (req as any).user;
+    const { pushToken } = req.body;
+
+    if (!pushToken) {
+      return res.status(400).json({ success: false, message: "Push token is required" });
+    }
+
+    if (user.pushTokens) {
+      user.pushTokens = user.pushTokens.filter((token: string) => token !== pushToken);
+      await user.save();
+    }
+
+    return res.status(200).json({ success: true, message: "Push token removed successfully" });
+  } catch (error: any) {
+    console.error("Remove Push Token Error:", error);
+    return res.status(500).json({ success: false, message: error.message || "Internal server error" });
+  }
+};
+
+export const updateThemeColorController = async (req: Request, res: Response) => {
+  try {
+    const userId = (req as any).user._id;
+    const { themeColor } = req.body;
+
+    if (!themeColor) {
+      return res.status(400).json({ success: false, message: "themeColor is required" });
+    }
+
+    const updatedUser = await usermodel.findByIdAndUpdate(
+      userId,
+      { $set: { themeColor } },
+      { new: true }
+    );
+
+    return res.status(200).json({ success: true, user: updatedUser });
+  } catch (error: any) {
+    console.error("Update Theme Color Error:", error);
+    return res.status(500).json({ success: false, message: error.message || "Internal server error" });
+  }
+};

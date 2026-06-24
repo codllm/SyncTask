@@ -4,6 +4,7 @@ import Project from "../model/project.model";
 import mongoose from "mongoose";
 import { createNotification } from "./notification.service";
 import { seedDemoWorkspacesForUser } from "./demo.service";
+import User from "../model/user.model";
 
 interface CreateWorkspacePayload {
   name: string;
@@ -59,22 +60,49 @@ export const getWorkspaceById = async (
 export const getUserWorkspaces = async (
   userId: string
 ) => {
+  // Delete any personal workspaces and their projects
+  const personalWorkspaces = await Workspace.find({
+    owner: userId,
+    name: { $in: ["Personal Tasks Workspace", "Personal Workspace"] }
+  });
+  if (personalWorkspaces.length > 0) {
+    const personalIds = personalWorkspaces.map(w => w._id);
+    await Project.deleteMany({ workspace: { $in: personalIds } });
+    await Workspace.deleteMany({ _id: { $in: personalIds } });
+  }
 
   let workspaces = await Workspace.find({
-    "members.user": userId,
+    members: {
+      $elemMatch: {
+        user: userId,
+        status: { $ne: "pending" },
+      },
+    },
   })
     .populate("owner")
     .populate("members.user");
 
   if (workspaces.length === 0) {
-    // Automatically seed two dummy workspaces with projects/tasks for first-time or empty users!
-    await seedDemoWorkspacesForUser(userId);
-    // Refetch the newly created demo workspaces
-    workspaces = await Workspace.find({
-      "members.user": userId,
-    })
-      .populate("owner")
-      .populate("members.user");
+    // Check if the user has already had their demo workspaces seeded
+    const user = await User.findById(userId);
+    if (user && !user.demoSeeded) {
+      // Automatically seed two dummy workspaces with projects/tasks for first-time or empty users!
+      await seedDemoWorkspacesForUser(userId);
+      user.demoSeeded = true;
+      await user.save();
+
+      // Refetch the newly created demo workspaces
+      workspaces = await Workspace.find({
+        members: {
+          $elemMatch: {
+            user: userId,
+            status: { $ne: "pending" },
+          },
+        },
+      })
+        .populate("owner")
+        .populate("members.user");
+    }
   }
 
   return workspaces;
@@ -152,6 +180,7 @@ export const addUserToWorkspace = async (
   workspace.members.push({
     user: new mongoose.Types.ObjectId(userId),
     role: "member",
+    status: "pending",
   });
 
   await workspace.save();
@@ -161,8 +190,10 @@ export const addUserToWorkspace = async (
     sender: inviterId || workspace.owner.toString(),
     type: "WORKSPACE_INVITE",
     title: "Workspace Invitation",
-    message: `You have been added to the workspace: "${workspace.name}"`,
+    message: `You have been invited to join the workspace: "${workspace.name}"`,
     link: `/workspaces/${workspace._id}`,
+    workspace: workspace._id,
+    inviteStatus: "pending",
   });
 
   return workspace;

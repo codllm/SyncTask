@@ -12,12 +12,13 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.deleteSavedFilterController = exports.getSavedFiltersController = exports.saveFilterController = exports.updateAvatarController = exports.getPinnedItemsController = exports.togglePinTaskController = exports.togglePinProjectController = exports.updatePreferences = exports.logout = exports.forgetPass = exports.updateUserProfile = exports.profile = exports.login = exports.signup = void 0;
+exports.updateThemeColorController = exports.removePushTokenController = exports.registerPushTokenController = exports.appleAuth = exports.googleAuth = exports.deleteSavedFilterController = exports.getSavedFiltersController = exports.saveFilterController = exports.updateAvatarController = exports.getPinnedItemsController = exports.togglePinTaskController = exports.togglePinProjectController = exports.updatePreferences = exports.logout = exports.forgetPass = exports.updateUserProfile = exports.profile = exports.login = exports.signup = void 0;
 const express_validator_1 = require("express-validator");
 const user_service_1 = require("../services/user.service"); // Named import
 const user_model_1 = __importDefault(require("../model/user.model"));
 const cloudinary_1 = __importDefault(require("../config/cloudinary"));
 const fs_1 = __importDefault(require("fs"));
+const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const signup = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     const errors = (0, express_validator_1.validationResult)(req);
     if (!errors.isEmpty()) {
@@ -208,10 +209,27 @@ const getPinnedItemsController = (req, res) => __awaiter(void 0, void 0, void 0,
         if (!user) {
             return res.status(404).json({ success: false, message: "User not found" });
         }
+        const populatedProjects = (user.pinnedProjects || []);
+        const populatedTasks = (user.pinnedTasks || []);
+        const pinnedProjectsFiltered = populatedProjects.filter(p => p !== null);
+        const pinnedTasksFiltered = populatedTasks.filter(t => t !== null);
+        // Self-healing: if any pinned items were deleted and populated as null, clean up DB
+        let needsUpdate = false;
+        if (pinnedProjectsFiltered.length !== populatedProjects.length) {
+            user.pinnedProjects = pinnedProjectsFiltered.map((p) => p._id);
+            needsUpdate = true;
+        }
+        if (pinnedTasksFiltered.length !== populatedTasks.length) {
+            user.pinnedTasks = pinnedTasksFiltered.map((t) => t._id);
+            needsUpdate = true;
+        }
+        if (needsUpdate) {
+            yield user.save();
+        }
         return res.status(200).json({
             success: true,
-            pinnedProjects: user.pinnedProjects || [],
-            pinnedTasks: user.pinnedTasks || [],
+            pinnedProjects: pinnedProjectsFiltered,
+            pinnedTasks: pinnedTasksFiltered,
         });
     }
     catch (error) {
@@ -339,3 +357,199 @@ const deleteSavedFilterController = (req, res) => __awaiter(void 0, void 0, void
     }
 });
 exports.deleteSavedFilterController = deleteSavedFilterController;
+const googleAuth = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    const { idToken, profile } = req.body;
+    try {
+        let email;
+        let firstname;
+        let lastname;
+        let googleId;
+        let avatarUrl;
+        if (idToken) {
+            // Real Google token verification
+            const verifyUrl = `https://oauth2.googleapis.com/tokeninfo?id_token=${idToken}`;
+            const response = yield fetch(verifyUrl);
+            if (!response.ok) {
+                return res.status(400).json({ success: false, message: "Invalid Google ID token" });
+            }
+            const tokenInfo = yield response.json();
+            email = tokenInfo.email;
+            firstname = tokenInfo.given_name || "Google";
+            lastname = tokenInfo.family_name || "User";
+            googleId = tokenInfo.sub;
+            avatarUrl = tokenInfo.picture;
+        }
+        else if (profile) {
+            // Simulated profile (for development/testing/simulator)
+            if (process.env.NODE_ENV === "production") {
+                return res.status(400).json({ success: false, message: "Simulated profiles are not allowed in production mode. A valid token is required." });
+            }
+            email = profile.email;
+            firstname = profile.firstname || "Google";
+            lastname = profile.lastname || "User";
+            googleId = profile.googleId;
+            avatarUrl = profile.avatarUrl;
+        }
+        else {
+            return res.status(400).json({ success: false, message: "Missing Google authentication data" });
+        }
+        if (!email || !googleId) {
+            return res.status(400).json({ success: false, message: "Required user info not found in Google profile" });
+        }
+        // Find or create user
+        let user = yield user_model_1.default.findOne({ $or: [{ googleId }, { email: email.toLowerCase() }] });
+        if (!user) {
+            // Create new user
+            user = new user_model_1.default({
+                username: { firstname, lastname },
+                email: email.toLowerCase(),
+                gender: "not_specified",
+                usertype: "individual",
+                googleId,
+                avatarUrl: avatarUrl || "",
+                phone: 1234567890 // Temporary dummy phone number
+            });
+            yield user.save();
+        }
+        else if (!user.googleId) {
+            // Link Google account to existing email account
+            user.googleId = googleId;
+            if (avatarUrl && !user.avatarUrl) {
+                user.avatarUrl = avatarUrl;
+            }
+            yield user.save();
+        }
+        const token = user.generateToken();
+        return res.status(200).json({ success: true, user, token });
+    }
+    catch (error) {
+        console.error("Google Auth Error:", error);
+        return res.status(500).json({ success: false, message: error.message || "Internal server error" });
+    }
+});
+exports.googleAuth = googleAuth;
+const appleAuth = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    const { identityToken, profile } = req.body;
+    try {
+        let email;
+        let firstname;
+        let lastname;
+        let appleId;
+        if (identityToken) {
+            // Decode Apple ID Token
+            const decoded = jsonwebtoken_1.default.decode(identityToken);
+            if (!decoded) {
+                return res.status(400).json({ success: false, message: "Invalid Apple identity token" });
+            }
+            email = decoded.email;
+            appleId = decoded.sub;
+            firstname = "Apple";
+            lastname = "User";
+            // If user profile is sent (Apple only sends name on the very first authentication)
+            if (profile && profile.username) {
+                firstname = profile.username.firstname || firstname;
+                lastname = profile.username.lastname || lastname;
+            }
+        }
+        else if (profile) {
+            // Simulated profile (for development/testing/simulator)
+            if (process.env.NODE_ENV === "production") {
+                return res.status(400).json({ success: false, message: "Simulated profiles are not allowed in production mode. A valid token is required." });
+            }
+            email = profile.email;
+            firstname = profile.firstname || "Apple";
+            lastname = profile.lastname || "User";
+            appleId = profile.appleId;
+        }
+        else {
+            return res.status(400).json({ success: false, message: "Missing Apple authentication data" });
+        }
+        if (!email || !appleId) {
+            return res.status(400).json({ success: false, message: "Required user info not found in Apple profile" });
+        }
+        // Find or create user
+        let user = yield user_model_1.default.findOne({ $or: [{ appleId }, { email: email.toLowerCase() }] });
+        if (!user) {
+            // Create new user
+            user = new user_model_1.default({
+                username: { firstname, lastname },
+                email: email.toLowerCase(),
+                gender: "not_specified",
+                usertype: "individual",
+                appleId,
+                avatarUrl: "",
+                phone: 1234567890 // Temporary dummy phone number
+            });
+            yield user.save();
+        }
+        else if (!user.appleId) {
+            // Link Apple account to existing email account
+            user.appleId = appleId;
+            yield user.save();
+        }
+        const token = user.generateToken();
+        return res.status(200).json({ success: true, user, token });
+    }
+    catch (error) {
+        console.error("Apple Auth Error:", error);
+        return res.status(500).json({ success: false, message: error.message || "Internal server error" });
+    }
+});
+exports.appleAuth = appleAuth;
+const registerPushTokenController = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const user = req.user;
+        const { pushToken } = req.body;
+        if (!pushToken) {
+            return res.status(400).json({ success: false, message: "Push token is required" });
+        }
+        if (!user.pushTokens) {
+            user.pushTokens = [];
+        }
+        if (!user.pushTokens.includes(pushToken)) {
+            user.pushTokens.push(pushToken);
+            yield user.save();
+        }
+        return res.status(200).json({ success: true, message: "Push token registered successfully" });
+    }
+    catch (error) {
+        console.error("Register Push Token Error:", error);
+        return res.status(500).json({ success: false, message: error.message || "Internal server error" });
+    }
+});
+exports.registerPushTokenController = registerPushTokenController;
+const removePushTokenController = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const user = req.user;
+        const { pushToken } = req.body;
+        if (!pushToken) {
+            return res.status(400).json({ success: false, message: "Push token is required" });
+        }
+        if (user.pushTokens) {
+            user.pushTokens = user.pushTokens.filter((token) => token !== pushToken);
+            yield user.save();
+        }
+        return res.status(200).json({ success: true, message: "Push token removed successfully" });
+    }
+    catch (error) {
+        console.error("Remove Push Token Error:", error);
+        return res.status(500).json({ success: false, message: error.message || "Internal server error" });
+    }
+});
+exports.removePushTokenController = removePushTokenController;
+const updateThemeColorController = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const userId = req.user._id;
+        const { themeColor } = req.body;
+        if (!themeColor) {
+            return res.status(400).json({ success: false, message: "themeColor is required" });
+        }
+        const updatedUser = yield user_model_1.default.findByIdAndUpdate(userId, { $set: { themeColor } }, { new: true });
+        return res.status(200).json({ success: true, user: updatedUser });
+    }
+    catch (error) {
+        console.error("Update Theme Color Error:", error);
+        return res.status(500).json({ success: false, message: error.message || "Internal server error" });
+    }
+});
+exports.updateThemeColorController = updateThemeColorController;

@@ -171,7 +171,7 @@ export const deleteTaskController = async (
     });
 
   } catch (error) {
-
+    console.error("deleteTaskController error:", error);
     return res.status(500).json({
       success: false,
       message: "Failed to delete task",

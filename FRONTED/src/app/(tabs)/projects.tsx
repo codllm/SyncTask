@@ -37,28 +37,44 @@ import { Ionicons } from "@expo/vector-icons";
 
 // ─── Design tokens ────────────────────────────────────────────────────────────
 const C = {
-  bg: "#15171C",
-  surface: "#1B1E25",
-  card: "#1C1F26",
-  cardAlt: "#20242C",
-  cardBorder: "#262A33",
-  border: "#262A33",
-  borderLight: "#343944",
-  textPrimary: "#FFFFFF",
-  textSecondary: "#ffff",
-  textMuted: "#ffff",
-  accent: "#5B8DEF",
-  onAccent: "#0B0C10",
-  accentBg: "rgba(91,141,239,0.14)",
-  accentBorder: "rgba(91,141,239,0.35)",
-  danger: "#F0827E",
-  dangerBg: "rgba(226,75,74,0.12)",
-  dangerBorder: "rgba(226,75,74,0.28)",
-  done: "#5DCAA5",
+  // Backgrounds
+  bg: "#0D1117",
+  surface: "#161B22",
+  card: "#161B22",
+  cardAlt: "#1A1F28",
+
+  // Borders
+  cardBorder: "#30363D",
+  border: "#30363D",
+  borderLight: "#3A424D",
+
+  // Typography
+  textPrimary: "#F0F6FC",
+  textSecondary: "#C9D1D9",
+  textMuted: "#8B949E",
+
+  // Accent
+  accent: "#5E6AD2",
+  onAccent: "#FFFFFF",
+  accentBg: "rgba(94,106,210,0.12)",
+  accentBorder: "rgba(94,106,210,0.30)",
+
+  // Danger
+  danger: "#F85149",
+  dangerBg: "rgba(248,81,73,0.08)",
+  dangerBorder: "rgba(248,81,73,0.18)",
+
+  // Success
+  done: "#3FB950",
 };
 
 const PROJECT_COLORS = [
-  "#5B8DEF", "#5DCAA5", "#EF9F27", "#F0827E", "#E093C0", "#9D7BEA",
+  "#5E6AD2", // Linear Purple
+  "#58A6FF", // Blue
+  "#3FB950", // Green
+  "#F85149", // Red
+  "#A371F7", // Violet
+  "#DB61A2", // Rose
 ];
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -411,7 +427,7 @@ export default function ProjectsScreen() {
             setSelProject(add.project);
             setQuery(""); setGlobalResults([]);
             await refreshWorkspaces(); await refreshProjects();
-            Alert.alert("Done", "User added to workspace and project.");
+            Alert.alert("Done", "Workspace invitation sent and user added to project.");
           } else {
             Alert.alert("Partial", "Added to workspace but failed to add to project.");
             await refreshWorkspaces();
@@ -442,13 +458,12 @@ export default function ProjectsScreen() {
       {/* ── HEADER ── */}
       <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 18, paddingTop: 12, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: C.card }}>
         <View>
-          <Text style={{ color: C.textMuted, fontSize: 10, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 2 }}>Workspace</Text>
           <Text style={{ color: C.textPrimary, fontSize: 18, fontWeight: "700" }}>{activeWorkspace.name}</Text>
         </View>
         {!isWorkspaceViewer && (
           <TouchableOpacity
             onPress={() => setCreateVisible(true)}
-            style={{ backgroundColor: themeColor, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 12, flexDirection: "row", alignItems: "center", gap: 5 }}
+            style={{ backgroundColor: "#6366F1", paddingHorizontal: 14, paddingVertical: 10, borderRadius: 12, flexDirection: "row", alignItems: "center", gap: 5 }}
           >
             <Ionicons name="add" size={16} color={C.onAccent} />
             <Text style={{ color: C.onAccent, fontWeight: "700", fontSize: 13 }}>New Project</Text>
@@ -463,7 +478,7 @@ export default function ProjectsScreen() {
             <Ionicons name="folder-open-outline" size={38} color={C.textMuted} style={{ marginBottom: 14 }} />
             <Text style={{ color: C.textSecondary, fontSize: 14, textAlign: "center", lineHeight: 22 }}>
               No projects yet.{"\n"}
-              <Text style={{ color: themeColor, fontWeight: "700" }}>Tap New Project</Text> to get started.
+
             </Text>
           </View>
         ) : projects.map((project: any) => {

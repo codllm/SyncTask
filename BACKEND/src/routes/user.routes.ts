@@ -1,6 +1,6 @@
 import { Router } from "express"; // Use import instead of require
 import { body } from "express-validator";
-import { signup, login, profile, logout,updateUserProfile,forgetPass, updatePreferences, togglePinProjectController, togglePinTaskController, getPinnedItemsController, updateAvatarController, saveFilterController, getSavedFiltersController, deleteSavedFilterController, googleAuth, appleAuth } from "../controllers/user.controller";
+import { signup, login, profile, logout,updateUserProfile,forgetPass, updatePreferences, togglePinProjectController, togglePinTaskController, getPinnedItemsController, updateAvatarController, saveFilterController, getSavedFiltersController, deleteSavedFilterController, googleAuth, appleAuth, registerPushTokenController, removePushTokenController, updateThemeColorController } from "../controllers/user.controller";
 import { userauth } from "../middleware/auth.middleware";
 import { upload } from "../middleware/upload.middleware";
 
@@ -63,6 +63,7 @@ router.get('/forget-password', [
 
 router.get("/profile", userauth, profile);
 router.put("/preferences", userauth, updatePreferences);
+router.put("/theme", userauth, updateThemeColorController);
 router.post("/logout", userauth, logout);
 
 // Pinning routes
@@ -75,6 +76,10 @@ router.put("/profile/avatar", userauth, upload.single("avatar"), updateAvatarCon
 router.post("/saved-filters", userauth, saveFilterController);
 router.get("/saved-filters/:projectId", userauth, getSavedFiltersController);
 router.delete("/saved-filters/:filterId", userauth, deleteSavedFilterController);
+
+// Push token routes
+router.post("/push-token", userauth, registerPushTokenController);
+router.post("/push-token/remove", userauth, removePushTokenController);
 
 // Social login routes
 router.post("/oauth/google", googleAuth);

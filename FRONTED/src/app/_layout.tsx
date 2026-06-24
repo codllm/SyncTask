@@ -5,6 +5,8 @@ import { View, ActivityIndicator } from "react-native";
 import * as SecureStore from "expo-secure-store";
 
 import { AppProvider, useApp } from "../context/AppContext";
+import { SocketProvider } from "../context/SocketContext";
+import { PushNotificationManager } from "../context/PushNotificationManager";
 
 function RootLayoutContent() {
   const { token, loading, themeColor } = useApp();
@@ -35,7 +37,11 @@ function RootLayoutContent() {
 export default function RootLayout() {
   return (
     <AppProvider>
-      <RootLayoutContent />
+      <SocketProvider>
+        <PushNotificationManager>
+          <RootLayoutContent />
+        </PushNotificationManager>
+      </SocketProvider>
     </AppProvider>
   );
 }

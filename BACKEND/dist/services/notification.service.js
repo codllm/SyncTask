@@ -12,9 +12,11 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.markAllNotificationsAsRead = exports.markNotificationAsRead = exports.getUserNotifications = exports.createNotification = void 0;
+exports.declineWorkspaceInvite = exports.acceptWorkspaceInvite = exports.markAllNotificationsAsRead = exports.markNotificationAsRead = exports.getUserNotifications = exports.createNotification = void 0;
 const notification_model_1 = __importDefault(require("../model/notification.model"));
 const socket_1 = require("./socket");
+const push_service_1 = require("./push.service");
+const workspace_model_1 = __importDefault(require("../model/workspace.model"));
 /**
  * Create a new notification, save to DB, and emit to Socket.io user room
  */
@@ -22,16 +24,19 @@ const createNotification = (payload) => __awaiter(void 0, void 0, void 0, functi
     const notification = yield notification_model_1.default.create(payload);
     // Populate sender details for the socket event
     const populatedNotification = yield notification_model_1.default.findById(notification._id)
-        .populate("sender", "username email");
+        .populate("sender", "username email")
+        .populate("workspace", "name logoUrl");
     // Emit a real-time socket event directly to the recipient's room
     (0, socket_1.emitToUser)(payload.recipient.toString(), "notification:received", populatedNotification);
+    // Send background remote push notification
+    (0, push_service_1.sendPushNotification)(payload.recipient.toString(), payload.title, payload.message, { notificationId: notification._id.toString() });
     return notification;
 });
 exports.createNotification = createNotification;
 /**
  * Fetch latest notifications for a specific user
  */
-const getUserNotifications = (userId_1, ...args_1) => __awaiter(void 0, [userId_1, ...args_1], void 0, function* (userId, limit = 20, page = 1, type) {
+const getUserNotifications = (userId_1, ...args_1) => __awaiter(void 0, [userId_1, ...args_1], void 0, function* (userId, limit = 15, page = 1, type) {
     const skip = (page - 1) * limit;
     const query = { recipient: userId };
     if (type) {
@@ -39,6 +44,7 @@ const getUserNotifications = (userId_1, ...args_1) => __awaiter(void 0, [userId_
     }
     const notifications = yield notification_model_1.default.find(query)
         .populate("sender", "username email")
+        .populate("workspace", "name logoUrl")
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit);
@@ -50,7 +56,7 @@ exports.getUserNotifications = getUserNotifications;
  * Mark a specific notification as read
  */
 const markNotificationAsRead = (notificationId, userId) => __awaiter(void 0, void 0, void 0, function* () {
-    const notification = yield notification_model_1.default.findOneAndUpdate({ _id: notificationId, recipient: userId }, { $set: { read: true } }, { new: true }).populate("sender", "username email");
+    const notification = yield notification_model_1.default.findOneAndUpdate({ _id: notificationId, recipient: userId }, { $set: { read: true } }, { new: true }).populate("sender", "username email").populate("workspace", "name logoUrl");
     if (!notification) {
         throw new Error("Notification not found or unauthorized");
     }
@@ -69,3 +75,76 @@ const markAllNotificationsAsRead = (userId) => __awaiter(void 0, void 0, void 0,
     return { success: true, modifiedCount: result.modifiedCount };
 });
 exports.markAllNotificationsAsRead = markAllNotificationsAsRead;
+/**
+ * Accept workspace invite by notification ID
+ */
+const acceptWorkspaceInvite = (notificationId, userId) => __awaiter(void 0, void 0, void 0, function* () {
+    var _a;
+    const notification = yield notification_model_1.default.findOne({ _id: notificationId, recipient: userId });
+    if (!notification) {
+        throw new Error("Notification not found or unauthorized");
+    }
+    if (notification.type !== "WORKSPACE_INVITE") {
+        throw new Error("Invalid notification type");
+    }
+    const workspaceId = notification.workspace || ((_a = notification.link) === null || _a === void 0 ? void 0 : _a.split("/").pop());
+    if (!workspaceId) {
+        throw new Error("Workspace ID not found in notification");
+    }
+    const workspace = yield workspace_model_1.default.findById(workspaceId);
+    if (!workspace) {
+        throw new Error("Workspace not found");
+    }
+    const member = workspace.members.find((m) => m.user.toString() === userId);
+    if (!member) {
+        throw new Error("You are not invited to this workspace");
+    }
+    member.status = "joined";
+    yield workspace.save();
+    notification.inviteStatus = "accepted";
+    notification.read = true;
+    yield notification.save();
+    const populated = yield notification_model_1.default.findById(notification._id)
+        .populate("sender", "username email")
+        .populate("workspace", "name logoUrl");
+    if (populated) {
+        (0, socket_1.emitToUser)(userId, "notification:updated", populated);
+        return populated;
+    }
+    return notification;
+});
+exports.acceptWorkspaceInvite = acceptWorkspaceInvite;
+/**
+ * Decline workspace invite by notification ID
+ */
+const declineWorkspaceInvite = (notificationId, userId) => __awaiter(void 0, void 0, void 0, function* () {
+    var _a;
+    const notification = yield notification_model_1.default.findOne({ _id: notificationId, recipient: userId });
+    if (!notification) {
+        throw new Error("Notification not found or unauthorized");
+    }
+    if (notification.type !== "WORKSPACE_INVITE") {
+        throw new Error("Invalid notification type");
+    }
+    const workspaceId = notification.workspace || ((_a = notification.link) === null || _a === void 0 ? void 0 : _a.split("/").pop());
+    if (!workspaceId) {
+        throw new Error("Workspace ID not found in notification");
+    }
+    const workspace = yield workspace_model_1.default.findById(workspaceId);
+    if (workspace) {
+        workspace.members = workspace.members.filter((m) => m.user.toString() !== userId);
+        yield workspace.save();
+    }
+    notification.inviteStatus = "declined";
+    notification.read = true;
+    yield notification.save();
+    const populated = yield notification_model_1.default.findById(notification._id)
+        .populate("sender", "username email")
+        .populate("workspace", "name logoUrl");
+    if (populated) {
+        (0, socket_1.emitToUser)(userId, "notification:updated", populated);
+        return populated;
+    }
+    return notification;
+});
+exports.declineWorkspaceInvite = declineWorkspaceInvite;

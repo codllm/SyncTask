@@ -290,23 +290,30 @@ exports.updateTaskService = updateTaskService;
 const deleteTaskService = (taskId, userId) => __awaiter(void 0, void 0, void 0, function* () {
     const task = yield task_model_1.default.findById(taskId);
     if (task) {
+        const positionVal = typeof task.position === "number" ? task.position : 0;
         // Shift subsequent tasks in the same status down
-        yield task_model_1.default.updateMany({ project: task.project, status: task.status, position: { $gt: task.position } }, { $inc: { position: -1 } });
-        const project = yield project_model_1.default.findById(task.project);
-        if (project && userId) {
-            yield (0, activity_service_1.createActivityLog)({
-                workspace: project.workspace.toString(),
-                project: project._id.toString(),
-                task: task._id.toString(),
-                user: userId,
-                action: "task_deleted",
-                details: `deleted task "${task.title}"`,
-            });
+        if (task.project) {
+            yield task_model_1.default.updateMany({ project: task.project, status: task.status, position: { $gt: positionVal } }, { $inc: { position: -1 } });
+        }
+        if (task.project) {
+            const project = yield project_model_1.default.findById(task.project);
+            if (project && userId && project.workspace) {
+                yield (0, activity_service_1.createActivityLog)({
+                    workspace: project.workspace.toString(),
+                    project: project._id.toString(),
+                    task: task._id.toString(),
+                    user: userId,
+                    action: "task_deleted",
+                    details: `deleted task "${task.title}"`,
+                });
+            }
         }
         task.isDeleted = true;
         task.deletedAt = new Date();
         yield task.save();
-        (0, socket_1.emitToProject)(task.project.toString(), "task:deleted", { taskId });
+        if (task.project) {
+            (0, socket_1.emitToProject)(task.project.toString(), "task:deleted", { taskId });
+        }
     }
     return task;
 });

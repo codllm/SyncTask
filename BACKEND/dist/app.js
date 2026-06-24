@@ -18,6 +18,7 @@ const analytics_routes_1 = __importDefault(require("./routes/analytics.routes"))
 const upload_routes_1 = __importDefault(require("./routes/upload.routes"));
 const activity_routes_1 = __importDefault(require("./routes/activity.routes"));
 const milestone_routes_1 = __importDefault(require("./routes/milestone.routes"));
+const todo_routes_1 = __importDefault(require("./routes/todo.routes"));
 const app = (0, express_1.default)();
 app.use((0, cors_1.default)({ origin: true, credentials: true }));
 app.use(express_1.default.json());
@@ -36,4 +37,5 @@ app.use("/api/analytics", analytics_routes_1.default);
 app.use("/api/upload", upload_routes_1.default);
 app.use("/api/activities", activity_routes_1.default);
 app.use("/api/milestones", milestone_routes_1.default);
+app.use("/api/todos", todo_routes_1.default);
 exports.default = app;

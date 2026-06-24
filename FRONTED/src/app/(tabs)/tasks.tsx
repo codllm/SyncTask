@@ -70,6 +70,7 @@ import * as ImagePicker from "expo-image-picker";
 import * as DocumentPicker from "expo-document-picker";
 import { uploadFile } from "../../api/upload.api";
 import { useRouter } from "expo-router";
+import { TodoModeTasksView } from "../../Screen/TodoMode";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
@@ -81,43 +82,53 @@ const { width: SCREEN_WIDTH } = Dimensions.get("window");
 // config, label colors) derives from this single object so the whole screen
 // stays visually consistent.
 const C = {
-  bg: "#15171C",
-  surface: "#1B1E25",
-  card: "#1F2229",
-  cardBorder: "#2A2E37",
-  border: "#262A33",
-  borderLight: "#343944",
-  textPrimary: "#FFFFFF",
-  textSecondary: "#F3F4F6",
-  textMuted: "#E5E7EB",
+  // Backgrounds
+  bg: "#0D1117",
+  surface: "#161B22",
+  card: "#161B22",
+  cardBorder: "#30363D",
+  border: "#30363D",
+  borderLight: "#3A424D",
 
-  accent: "#5B8DEF",
-  onAccent: "#0B0C10",
-  accentBg: "rgba(91,141,239,0.14)",
-  accentText: "#9DBBF6",
-  accentBorder: "rgba(91,141,239,0.35)",
+  // Typography
+  textPrimary: "#F0F6FC",
+  textSecondary: "#C9D1D9",
+  textMuted: "#8B949E",
 
-  high: "#F0827E",
-  highBg: "rgba(226,75,74,0.14)",
-  highBorder: "rgba(226,75,74,0.3)",
-  med: "#5B8DEF",
-  medBg: "rgba(91,141,239,0.14)",
-  medBorder: "rgba(91,141,239,0.3)",
-  low: "#5DCAA5",
-  lowBg: "rgba(93,202,165,0.14)",
-  lowBorder: "rgba(93,202,165,0.3)",
+  // Accent
+  accent: "#5E6AD2",
+  onAccent: "#FFFFFF",
+  accentBg: "rgba(94,106,210,0.12)",
+  accentText: "#A7B3FF",
+  accentBorder: "rgba(94,106,210,0.30)",
 
-  todo: "#5B8DEF",
-  inprog: "#EF9F27",
-  done: "#5DCAA5",
+  // Priority colors
+  high: "#F85149",
+  highBg: "rgba(248,81,73,0.12)",
+  highBorder: "rgba(248,81,73,0.28)",
 
-  danger: "#F0827E",
-  dangerBg: "rgba(226,75,74,0.12)",
-  dangerBorder: "rgba(226,75,74,0.28)",
+  med: "#58A6FF",
+  medBg: "rgba(88,166,255,0.12)",
+  medBorder: "rgba(88,166,255,0.28)",
 
-  warn: "#EF9F27",
-  warnBg: "rgba(239,159,39,0.12)",
-  warnBorder: "rgba(239,159,39,0.28)",
+  low: "#3FB950",
+  lowBg: "rgba(63,185,80,0.12)",
+  lowBorder: "rgba(63,185,80,0.28)",
+
+  // Kanban columns
+  todo: "#58A6FF",
+  inprog: "#D29922",
+  done: "#3FB950",
+
+  // Danger
+  danger: "#F85149",
+  dangerBg: "rgba(248,81,73,0.08)",
+  dangerBorder: "rgba(248,81,73,0.18)",
+
+  // Warning
+  warn: "#D29922",
+  warnBg: "rgba(210,153,34,0.12)",
+  warnBorder: "rgba(210,153,34,0.28)",
 };
 
 const DEFAULT_BOARD_COLUMNS = [
@@ -766,10 +777,160 @@ const CustomFieldTextInput = ({ field, initialValue, onSave, isViewer }: any) =>
   );
 };
 
+interface CalendarDatePickerModalProps {
+  visible: boolean;
+  value?: string;
+  onClose: () => void;
+  onChange: (val: string) => void;
+  title: string;
+}
+
+const CalendarDatePickerModal: React.FC<CalendarDatePickerModalProps> = ({
+  visible,
+  value,
+  onClose,
+  onChange,
+  title,
+}) => {
+  const [viewDate, setViewDate] = useState<Date>(new Date());
+
+  useEffect(() => {
+    if (visible) {
+      setViewDate(value ? new Date(value) : new Date());
+    }
+  }, [visible, value]);
+
+  const handleSelectDay = (day: Date) => {
+    const yyyy = day.getFullYear();
+    const mm = String(day.getMonth() + 1).padStart(2, "0");
+    const dd = String(day.getDate()).padStart(2, "0");
+    onChange(`${yyyy}-${mm}-${dd}`);
+    onClose();
+  };
+
+  const handleClear = () => {
+    onChange("");
+    onClose();
+  };
+
+  const year = viewDate.getFullYear();
+  const month = viewDate.getMonth();
+
+  const firstDayIndex = new Date(year, month, 1).getDay();
+  const totalDays = new Date(year, month + 1, 0).getDate();
+
+  const days: (Date | null)[] = [];
+  for (let i = 0; i < firstDayIndex; i++) {
+    days.push(null);
+  }
+  for (let i = 1; i <= totalDays; i++) {
+    days.push(new Date(year, month, i));
+  }
+
+  const selectedDate = value ? new Date(value) : null;
+  const isSelected = (day: Date) => {
+    if (!selectedDate) return false;
+    return (
+      selectedDate.getFullYear() === day.getFullYear() &&
+      selectedDate.getMonth() === day.getMonth() &&
+      selectedDate.getDate() === day.getDate()
+    );
+  };
+
+  const isToday = (day: Date) => {
+    const today = new Date();
+    return (
+      today.getFullYear() === day.getFullYear() &&
+      today.getMonth() === day.getMonth() &&
+      today.getDate() === day.getDate()
+    );
+  };
+
+  const handlePrevMonth = () => {
+    setViewDate(new Date(year, month - 1, 1));
+  };
+
+  const handleNextMonth = () => {
+    setViewDate(new Date(year, month + 1, 1));
+  };
+
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <View style={s.modalOverlay}>
+        <TouchableOpacity style={StyleSheet.absoluteFill} onPress={onClose} />
+        <View style={[s.createModal, { width: 320, padding: 16 }]}>
+          <Text style={[s.modalTitle, { fontSize: 16, marginBottom: 14, textAlign: "center" }]}>{title}</Text>
+
+          <View style={[s.row, { justifyContent: "space-between", marginBottom: 16, alignItems: "center" }]}>
+            <TouchableOpacity onPress={handlePrevMonth} style={s.calNavBtn}>
+              <Ionicons name="chevron-back" size={16} color={C.textPrimary} />
+            </TouchableOpacity>
+            <Text style={s.calMonthLabel}>
+              {viewDate.toLocaleString("default", { month: "long", year: "numeric" })}
+            </Text>
+            <TouchableOpacity onPress={handleNextMonth} style={s.calNavBtn}>
+              <Ionicons name="chevron-forward" size={16} color={C.textPrimary} />
+            </TouchableOpacity>
+          </View>
+
+          <View style={{ flexDirection: "row", justifyContent: "space-around", marginBottom: 8 }}>
+            {["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"].map((day) => (
+              <Text key={day} style={[s.calWeekdayLabel, { width: 36, textAlign: "center" }]}>{day}</Text>
+            ))}
+          </View>
+
+          <View style={{ flexDirection: "row", flexWrap: "wrap", justifyContent: "flex-start", marginBottom: 16 }}>
+            {days.map((day, idx) => {
+              if (!day) {
+                return <View key={`empty-${idx}`} style={{ width: 36, height: 36, margin: 2 }} />;
+              }
+
+              const active = isSelected(day);
+              const today = isToday(day);
+
+              return (
+                <TouchableOpacity
+                  key={day.toISOString()}
+                  onPress={() => handleSelectDay(day)}
+                  style={[
+                    s.calDayCell,
+                    { width: 36, height: 36, margin: 2, borderRadius: 18 },
+                    active && { backgroundColor: C.accent },
+                    today && !active && { borderWidth: 1, borderColor: C.accentBorder }
+                  ]}
+                >
+                  <Text style={[s.calDayText, active && { color: C.onAccent }, today && !active && { color: C.accent }]}>
+                    {day.getDate()}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+
+          <View style={[s.row, { gap: 10, justifyContent: "flex-end" }]}>
+            {value ? (
+              <TouchableOpacity onPress={handleClear} style={[s.secondaryBtn, { flex: 0, paddingHorizontal: 12, paddingVertical: 6 }]}>
+                <Text style={s.secondaryBtnText}>Clear</Text>
+              </TouchableOpacity>
+            ) : null}
+            <TouchableOpacity onPress={onClose} style={[s.primaryBtn, { flex: 0, paddingHorizontal: 12, paddingVertical: 6 }]}>
+              <Text style={s.primaryBtnText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+};
+
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 export default function TasksScreen() {
   const router = useRouter();
-  const { user, activeProject, setActiveProject, activeWorkspace, themeColor, refreshProjects } = useApp();
+  const { user, activeProject, setActiveProject, activeWorkspace, themeColor, refreshProjects, todoMode } = useApp();
+
+  if (todoMode) {
+    return <TodoModeTasksView />;
+  }
 
   const wsMember = activeWorkspace?.members?.find((m: any) => getUserId(m.user) === user?._id);
   const isWorkspaceViewer = wsMember?.role === "viewer";
@@ -1224,6 +1385,10 @@ export default function TasksScreen() {
   const [description, setDescription] = useState("");
   const [priority, setPriority] = useState<"low" | "medium" | "high">("medium");
   const [dueDate, setDueDate] = useState("");
+  const [createDueDatePickerVisible, setCreateDueDatePickerVisible] = useState(false);
+  const [createStartDatePickerVisible, setCreateStartDatePickerVisible] = useState(false);
+  const [detailDueDatePickerVisible, setDetailDueDatePickerVisible] = useState(false);
+  const [detailStartDatePickerVisible, setDetailStartDatePickerVisible] = useState(false);
   const [assignedTo, setAssignedTo] = useState<string[]>([]);
   const [createRecurringFrequency, setCreateRecurringFrequency] = useState<"none" | "daily" | "weekly" | "monthly">("none");
   const [createDependencies, setCreateDependencies] = useState<string[]>([]);
@@ -1454,6 +1619,7 @@ export default function TasksScreen() {
         project: activeProject._id,
         priority,
         dueDate: dueDate.trim() || undefined,
+        startDate: startDate.trim() || undefined,
         assignedTo: assignedTo.length > 0 ? assignedTo : undefined,
         labels: createLabels,
         dependencies: createDependencies.length > 0 ? createDependencies : undefined,
@@ -1464,6 +1630,7 @@ export default function TasksScreen() {
         setDescription("");
         setPriority("medium");
         setDueDate("");
+        setStartDate("");
         setAssignedTo([]);
         setCreateRecurringFrequency("none");
         setCreateDependencies([]);
@@ -1500,6 +1667,32 @@ export default function TasksScreen() {
       }
     } catch (err: any) {
       Alert.alert("Error", err?.response?.data?.message || "Failed to update description.");
+    }
+  };
+
+  const handleUpdateDueDate = async (date: string) => {
+    if (!selectedTask) return;
+    try {
+      const res = await updateTask(selectedTask._id, { dueDate: date || null });
+      if (res.success) {
+        setSelectedTask(res.task);
+        await loadTasks();
+      }
+    } catch (err: any) {
+      Alert.alert("Error", err?.response?.data?.message || "Failed to update due date.");
+    }
+  };
+
+  const handleUpdateStartDate = async (date: string) => {
+    if (!selectedTask) return;
+    try {
+      const res = await updateTask(selectedTask._id, { startDate: date || null });
+      if (res.success) {
+        setSelectedTask(res.task);
+        await loadTasks();
+      }
+    } catch (err: any) {
+      Alert.alert("Error", err?.response?.data?.message || "Failed to update start date.");
     }
   };
 
@@ -2635,7 +2828,7 @@ export default function TasksScreen() {
   const filteredTasks = getFilteredAndSortedTasks();
   // ── Main board ─────────────────────────────────────────────────────────────
   return (
-    <SafeAreaView style={[s.flex, { backgroundColor: C.bg }]} {...(draggingTask ? panResponder.panHandlers : {})}>
+    <SafeAreaView style={[s.flex, { backgroundColor: C.bg }]} edges={['top', 'left', 'right']} {...(draggingTask ? panResponder.panHandlers : {})}>
 
       {/* Header */}
       <View style={s.header}>
@@ -2963,9 +3156,26 @@ export default function TasksScreen() {
               </View>
 
               <SectionLabel>Due date</SectionLabel>
-              <View style={[s.inputWrap, { marginBottom: 16 }]}>
-                <TextInput style={s.input} placeholder="YYYY-MM-DD" placeholderTextColor={C.textMuted} value={dueDate} onChangeText={setDueDate} />
-              </View>
+              <TouchableOpacity
+                onPress={() => setCreateDueDatePickerVisible(true)}
+                style={[s.inputWrap, { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }]}
+              >
+                <Text style={[s.input, { color: dueDate ? C.textPrimary : C.textMuted, paddingVertical: 10 }]}>
+                  {dueDate ? formatDate(dueDate) : "Select due date (optional)"}
+                </Text>
+                <Ionicons name="calendar-outline" size={16} color={C.textMuted} style={{ marginRight: 10 }} />
+              </TouchableOpacity>
+
+              <SectionLabel>Start date</SectionLabel>
+              <TouchableOpacity
+                onPress={() => setCreateStartDatePickerVisible(true)}
+                style={[s.inputWrap, { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }]}
+              >
+                <Text style={[s.input, { color: startDate ? C.textPrimary : C.textMuted, paddingVertical: 10 }]}>
+                  {startDate ? formatDate(startDate) : "Select start date (optional)"}
+                </Text>
+                <Ionicons name="calendar-outline" size={16} color={C.textMuted} style={{ marginRight: 10 }} />
+              </TouchableOpacity>
 
               <SectionLabel>Assign to</SectionLabel>
               <View style={[s.inputWrap, { marginBottom: 24, paddingVertical: 8 }]}>
@@ -3082,6 +3292,22 @@ export default function TasksScreen() {
             </View>
           </View>
         </View>
+
+        <CalendarDatePickerModal
+          visible={createDueDatePickerVisible}
+          value={dueDate}
+          onClose={() => setCreateDueDatePickerVisible(false)}
+          onChange={setDueDate}
+          title="Select Due Date"
+        />
+
+        <CalendarDatePickerModal
+          visible={createStartDatePickerVisible}
+          value={startDate}
+          onClose={() => setCreateStartDatePickerVisible(false)}
+          onChange={setStartDate}
+          title="Select Start Date"
+        />
       </Modal>
       {/* ── Modal: Task detail ─────────────────────────────────────────────── */}
       <Modal visible={detailModalVisible} transparent animationType="slide" onRequestClose={() => setDetailModalVisible(false)}>
@@ -3138,16 +3364,28 @@ export default function TasksScreen() {
                         {getPriorityConfig(C)[selectedTask.priority]?.label ?? selectedTask.priority}
                       </Text>
                     </View>
-                    <View style={s.infoCell}>
+                    <TouchableOpacity
+                      disabled={isViewer}
+                      onPress={() => setDetailDueDatePickerVisible(true)}
+                      style={[s.infoCell, !isViewer && { backgroundColor: "rgba(94,106,210,0.05)" }]}
+                    >
                       <Text style={s.infoCellLabel}>Due date</Text>
-                      <Text style={s.infoCellValue}>{formatDate(selectedTask.dueDate) || "None"}</Text>
-                    </View>
+                      <Text style={[s.infoCellValue, { color: selectedTask.dueDate ? C.textPrimary : C.textMuted }]}>
+                        {formatDate(selectedTask.dueDate) || "None"}
+                      </Text>
+                    </TouchableOpacity>
                   </View>
                   <View style={{ flexDirection: "row", borderTopWidth: 0.5, borderTopColor: C.border }}>
-                    <View style={[s.infoCell, { borderRightWidth: 0.5, borderRightColor: C.border }]}>
+                    <TouchableOpacity
+                      disabled={isViewer}
+                      onPress={() => setDetailStartDatePickerVisible(true)}
+                      style={[s.infoCell, { borderRightWidth: 0.5, borderRightColor: C.border }, !isViewer && { backgroundColor: "rgba(94,106,210,0.05)" }]}
+                    >
                       <Text style={s.infoCellLabel}>Start date</Text>
-                      <Text style={s.infoCellValue}>{formatDate(selectedTask.startDate) || "None"}</Text>
-                    </View>
+                      <Text style={[s.infoCellValue, { color: selectedTask.startDate ? C.textPrimary : C.textMuted }]}>
+                        {formatDate(selectedTask.startDate) || "None"}
+                      </Text>
+                    </TouchableOpacity>
                     <View style={s.infoCell}>
                       <Text style={s.infoCellLabel}>Members</Text>
                       <Text style={s.infoCellValue}>
@@ -3687,6 +3925,26 @@ export default function TasksScreen() {
             )}
           </View>
         </View>
+
+        {selectedTask && (
+          <>
+            <CalendarDatePickerModal
+              visible={detailDueDatePickerVisible}
+              value={selectedTask.dueDate}
+              onClose={() => setDetailDueDatePickerVisible(false)}
+              onChange={handleUpdateDueDate}
+              title="Update Due Date"
+            />
+
+            <CalendarDatePickerModal
+              visible={detailStartDatePickerVisible}
+              value={selectedTask.startDate}
+              onClose={() => setDetailStartDatePickerVisible(false)}
+              onChange={handleUpdateStartDate}
+              title="Update Start Date"
+            />
+          </>
+        )}
       </Modal>
       {/* ── Modal: Attachment Preview ────────────────────────────────────── */}
       <Modal visible={previewAttachment !== null} transparent animationType="fade" onRequestClose={() => setPreviewAttachment(null)}>

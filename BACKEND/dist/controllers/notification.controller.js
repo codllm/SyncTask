@@ -9,7 +9,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
     });
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.markAllAsReadController = exports.markAsReadController = exports.getNotificationsController = exports.createNotificationController = void 0;
+exports.declineWorkspaceInviteController = exports.acceptWorkspaceInviteController = exports.markAllAsReadController = exports.markAsReadController = exports.getNotificationsController = exports.createNotificationController = void 0;
 const notification_service_1 = require("../services/notification.service");
 const createNotificationController = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
@@ -24,7 +24,7 @@ exports.createNotificationController = createNotificationController;
 const getNotificationsController = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const user = req.user;
-        const limit = parseInt(req.query.limit) || 20;
+        const limit = parseInt(req.query.limit) || 15;
         const page = parseInt(req.query.page) || 1;
         const type = req.query.type;
         const data = yield (0, notification_service_1.getUserNotifications)(user._id, limit, page, type);
@@ -58,3 +58,27 @@ const markAllAsReadController = (req, res) => __awaiter(void 0, void 0, void 0, 
     }
 });
 exports.markAllAsReadController = markAllAsReadController;
+const acceptWorkspaceInviteController = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const user = req.user;
+        const notificationId = req.params.notificationId;
+        const notification = yield (0, notification_service_1.acceptWorkspaceInvite)(notificationId, user._id.toString());
+        res.status(200).json({ success: true, notification });
+    }
+    catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
+exports.acceptWorkspaceInviteController = acceptWorkspaceInviteController;
+const declineWorkspaceInviteController = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const user = req.user;
+        const notificationId = req.params.notificationId;
+        const notification = yield (0, notification_service_1.declineWorkspaceInvite)(notificationId, user._id.toString());
+        res.status(200).json({ success: true, notification });
+    }
+    catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
+exports.declineWorkspaceInviteController = declineWorkspaceInviteController;
