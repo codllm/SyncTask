@@ -1,0 +1,2 @@
+# Ignore package-lock.json to force npm install instead of npm ci on EAS Build
+package-lock.json
