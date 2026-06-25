@@ -306,8 +306,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (res.success) {
         setTodoTasks(res.todos);
       }
-    } catch (err) {
-      console.error("AppContext: error fetching todos:", err);
+    } catch (err: any) {
+      if (err?.response?.status === 401) {
+        await logout();
+      } else {
+        console.error("AppContext: error fetching todos:", err);
+      }
     }
   };
 
