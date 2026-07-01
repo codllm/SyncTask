@@ -17,7 +17,7 @@ import { createWorkspace } from "../../api/workspace.api";
 
 export default function CreateWorkspaceScreen() {
   const router = useRouter();
-  const { refreshWorkspaces, themeColor } = useApp();
+  const { refreshWorkspaces, selectWorkspace, themeColor } = useApp();
 
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -45,12 +45,14 @@ export default function CreateWorkspaceScreen() {
       });
 
       if (res.success) {
+        await selectWorkspace(res.workspace);
+        await refreshWorkspaces();
+
         Alert.alert(
           "Success",
           `Workspace "${res.workspace.name}" created successfully!`
         );
 
-        await refreshWorkspaces();
         router.replace("/(tabs)/home");
       } else {
         setError("Failed to create workspace");

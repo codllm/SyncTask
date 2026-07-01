@@ -96,7 +96,7 @@ export const updateProfileApi = async (payload: UpdateProfilePayload) => {
   if (payload.gender) body.gender = payload.gender;
   if (payload.phone) body.phone = payload.phone;
 
-  const res = await api.post("/api/users/update", body);
+  const res = await api.put("/api/users/profile", body);
   return { success: true, ...res.data };
 };
 

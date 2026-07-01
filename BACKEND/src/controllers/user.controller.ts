@@ -1,8 +1,7 @@
 import { Request, Response } from "express";
 import { validationResult } from "express-validator";
-import { createUser,updateUser,forgetPassword } from "../services/user.service"; // Named import
+import { createUser, forgetPassword } from "../services/user.service"; // Named import
 import usermodel from "../model/user.model";
-import { success } from "zod";
 import cloudinary from "../config/cloudinary";
 import fs from "fs";
 import jwt from "jsonwebtoken";
@@ -73,21 +72,38 @@ export const profile = async (req:Request, res:Response) => {
 };
 
 export const updateUserProfile = async (req: Request, res: Response) => {
-  const errors = validationResult(req);
-  if (!errors.isEmpty()) {
-    return res.status(400).json({ errors: errors.array() });
-  }
-
-  const { email, phone } = req.body;
-
   try {
-    const updatedUser = await updateUser({ email, phone });
-    if (!updatedUser) {
-      return res.status(404).json({ message: "User not found" });
+    const userId = (req as any).user?._id;
+    const { username, firstname, lastname, phone, age, gender } = req.body;
+
+    const update: Record<string, any> = {};
+
+    const nextFirstname = username?.firstname ?? firstname;
+    const nextLastname = username?.lastname ?? lastname;
+
+    if (nextFirstname !== undefined) update["username.firstname"] = String(nextFirstname).trim();
+    if (nextLastname !== undefined) update["username.lastname"] = String(nextLastname).trim();
+    if (age !== undefined) update.age = age;
+    if (gender !== undefined) update.gender = gender;
+    if (phone !== undefined) {
+      const parsedPhone = Number(phone);
+      if (Number.isNaN(parsedPhone)) {
+        return res.status(400).json({ success: false, message: "Phone must be a number" });
+      }
+      update.phone = parsedPhone;
     }
-    return res.status(200).json({ user: updatedUser });
+
+    if (Object.keys(update).length === 0) {
+      return res.status(400).json({ success: false, message: "No profile fields provided" });
+    }
+
+    const updatedUser = await usermodel.findByIdAndUpdate(userId, { $set: update }, { new: true });
+    if (!updatedUser) {
+      return res.status(404).json({ success: false, message: "User not found" });
+    }
+    return res.status(200).json({ success: true, user: updatedUser });
   } catch (error: any) {
-    return res.status(500).json({ message: error.message });
+    return res.status(500).json({ success: false, message: error.message });
   }
 }
 
@@ -106,9 +122,10 @@ export const logout = async (req: Request, res: Response) => {
 
   const token = req.headers.authorization?.split(" ")[1]; // Extract token from header
   if (!token) {
-    return res.status(400).json({ message: "Token is required for logout" });
+    return res.status(400).json({ success: false, message: "Token is required for logout" });
   }
   console.log("Logout token:", token); // Debugging log
+  return res.status(200).json({ success: true, message: "Logged out successfully" });
 };
 
 export const updatePreferences = async (req: Request, res: Response) => {

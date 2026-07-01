@@ -20,8 +20,6 @@ import * as ImagePicker from "expo-image-picker";
 import { useApp } from "../../context/AppContext";
 import { updateProfileApi, updatePreferencesApi, uploadAvatarApi } from "../../api/user.api";
 
-const GENDERS = ["male", "female", "other"];
-
 const THEME_COLORS = [
   { name: "Indigo", color: "#6366F1" },   // Modern primary
   { name: "Emerald", color: "#10B981" },  // Fresh green
@@ -133,9 +131,17 @@ export default function ProfileScreen() {
   };
 
   const handleLogout = () => {
+    if (Platform.OS === "web") {
+      const confirmed = window.confirm("Are you sure you want to sign out?");
+      if (confirmed) {
+        void logout();
+      }
+      return;
+    }
+
     Alert.alert("Sign out", "Are you sure you want to sign out?", [
       { text: "Cancel", style: "cancel" },
-      { text: "Sign out", style: "destructive", onPress: logout },
+      { text: "Sign out", style: "destructive", onPress: () => void logout() },
     ]);
   };
 

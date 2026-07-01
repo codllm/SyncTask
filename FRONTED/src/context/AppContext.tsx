@@ -1,8 +1,8 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import * as storage from "../utils/storage";
-import { getProfileApi, updateThemeColorApi } from "../api/user.api";
-import { getUserWorkspace, Workspace, createWorkspace } from "../api/workspace.api";
-import { getWorkspaceProjects, Project, createProject } from "../api/project.api";
+import { getProfileApi, logoutApi, updateThemeColorApi } from "../api/user.api";
+import { getUserWorkspace, Workspace } from "../api/workspace.api";
+import { getWorkspaceProjects, Project } from "../api/project.api";
 import { getNotifications } from "../api/notification.api";
 import { Todo, getTodos, createTodo, updateTodo, deleteTodo } from "../api/todo.api";
 
@@ -49,6 +49,7 @@ interface AppContextType {
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
+const ACTIVE_WORKSPACE_KEY = "activeWorkspaceId";
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const [user, setUserState] = useState<any | null>(null);
@@ -222,18 +223,24 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setWorkspaces(res.workspaces);
         
 
+        const savedWorkspaceId = await storage.getItemAsync(ACTIVE_WORKSPACE_KEY);
+        const preferredWorkspaceId = savedWorkspaceId || activeWorkspace?._id;
+
         // Auto-select active workspace if not set or doesn't exist in new list
         if (res.workspaces.length > 0) {
-          const currentActiveExists = activeWorkspace && res.workspaces.some((w: Workspace) => w._id === activeWorkspace._id);
-          if (!currentActiveExists) {
-            await selectWorkspace(res.workspaces[0]);
+          const nextActiveWorkspace =
+            res.workspaces.find((w: Workspace) => w._id === preferredWorkspaceId) ||
+            res.workspaces[0];
+
+          if (!activeWorkspace || activeWorkspace._id !== nextActiveWorkspace._id) {
+            await selectWorkspace(nextActiveWorkspace);
           } else {
             // Update current active workspace details
-            const updatedActive = res.workspaces.find((w: Workspace) => w._id === activeWorkspace?._id);
-            if (updatedActive) setActiveWorkspaceState(updatedActive);
+            setActiveWorkspaceState(nextActiveWorkspace);
           }
         } else {
           setActiveWorkspaceState(null);
+          await storage.deleteItemAsync(ACTIVE_WORKSPACE_KEY);
           setProjects([]);
           setActiveProject(null);
         }
@@ -387,9 +394,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, [user, token, tokenReady]);
 
-  const selectWorkspace = async (workspace: Workspace | null) => {
+  async function selectWorkspace(workspace: Workspace | null) {
     setActiveWorkspaceState(workspace);
     setActiveProject(null);
+    if (workspace) {
+      await storage.setItemAsync(ACTIVE_WORKSPACE_KEY, workspace._id);
+    } else {
+      await storage.deleteItemAsync(ACTIVE_WORKSPACE_KEY);
+    }
     const storedTheme = await storage.getItemAsync("themeColor");
     setThemeColorState(storedTheme || "#6366F1");
     if (workspace) {
@@ -397,7 +409,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     } else {
       setProjects([]);
     }
-  };
+  }
 
   const selectProject = (project: Project | null) => {
     setActiveProject(project);
@@ -412,11 +424,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
     await storage.setItemAsync("todoMode", enabled ? "true" : "false");
   };
 
-  const logout = async () => {
+  async function logout() {
+    try {
+      await logoutApi();
+    } catch (err) {
+      console.warn("AppContext: backend logout failed, clearing local session anyway:", err);
+    }
+
     try {
       // Clear storage
       await storage.deleteItemAsync("token");
       await storage.deleteItemAsync("User");
+      await storage.deleteItemAsync(ACTIVE_WORKSPACE_KEY);
     } catch (err) {
       console.error("AppContext: logout storage cleanup error:", err);
     } finally {
@@ -429,7 +448,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setUnreadCount(0);
       setTodoTasks([]);
     }
-  };
+  }
 
   return (
     <AppContext.Provider
@@ -441,7 +460,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         workspaces,
         setWorkspaces,
         activeWorkspace,
-        setActiveWorkspace: setActiveWorkspaceState,
+        setActiveWorkspace: selectWorkspace,
         projects,
         setProjects,
         activeProject,

@@ -51,17 +51,14 @@ router.post("/login", [
     body("password").isLength({ min: 3 }).withMessage("Password must be at least 3 characters long").notEmpty(),
 ], login);
 
-router.post("/update", [
-    body("email").isEmail().withMessage("Invalid email format").notEmpty(),
-    body("phone").isNumeric().withMessage("Phone must be a number").notEmpty(),
-], userauth,updateUserProfile
-);
+router.post("/update", userauth, updateUserProfile);
 
 router.get('/forget-password', [
     body("email").isEmail().withMessage("Invalid email format").notEmpty(),
 ], forgetPass)
 
 router.get("/profile", userauth, profile);
+router.put("/profile", userauth, updateUserProfile);
 router.put("/preferences", userauth, updatePreferences);
 router.put("/theme", userauth, updateThemeColorController);
 router.post("/logout", userauth, logout);
