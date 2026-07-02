@@ -74,7 +74,7 @@ import * as DocumentPicker from "expo-document-picker";
 import { uploadFile } from "../../api/upload.api";
 import { ConfirmDialog, ConfirmDialogAction } from "../../components/ConfirmDialog";
 import { createUploadFormData } from "../../utils/uploadFormData";
-import { generateTaskDraft } from "../../api/ai.api";
+import { generateTaskDraft, generateTaskSummary, rewriteComment, TaskSummary } from "../../api/ai.api";
 import { useRouter } from "expo-router";
 import { TodoModeTasksView } from "../../Screen/TodoMode";
 
@@ -1436,6 +1436,10 @@ export default function TasksScreen() {
   const [aiDraftLoading, setAiDraftLoading] = useState(false);
   const [aiDraftError, setAiDraftError] = useState("");
   const [aiChecklist, setAiChecklist] = useState<string[]>([]);
+  const [aiSummaryLoading, setAiSummaryLoading] = useState(false);
+  const [aiTaskSummary, setAiTaskSummary] = useState<TaskSummary | null>(null);
+  const [aiSummaryError, setAiSummaryError] = useState("");
+  const [commentPolishLoading, setCommentPolishLoading] = useState(false);
 
   // Detail
   const [newSubtaskTitle, setNewSubtaskTitle] = useState("");
@@ -1571,6 +1575,43 @@ export default function TasksScreen() {
       return;
     }
 
+    const applyDraft = (draft: {
+      title?: string;
+      description?: string;
+      priority?: "low" | "medium" | "high";
+      estimatedHours?: number;
+      checklist?: string[];
+      labels?: string[];
+    }) => {
+      setTitle(draft.title || title.trim());
+      setDescription(draft.description || description);
+      setPriority(draft.priority || "medium");
+      setCreateEstimatedHours(String(draft.estimatedHours || 3));
+      setAiChecklist(draft.checklist || []);
+      if (draft.labels?.length) {
+        setCreateLabels((prev) => Array.from(new Set([...prev, ...draft.labels!])));
+      }
+    };
+
+    const fallbackDraft = () => {
+      const cleanTitle = title.trim();
+      applyDraft({
+        title: cleanTitle,
+        description: `Plan and complete "${cleanTitle}". Confirm the expected behavior, design the approach, implement the main flow, test important cases, and note any follow-up work.`,
+        priority: "medium",
+        estimatedHours: 3,
+        labels: ["Planning"],
+        checklist: [
+          "Confirm requirements and scope",
+          "Break the work into clear implementation steps",
+          "Build the main flow",
+          "Test edge cases and mobile/web behavior",
+          "Document follow-up items",
+        ],
+      });
+      setAiDraftError("Using quick draft. Deploy backend AI route for NVIDIA output.");
+    };
+
     setAiDraftLoading(true);
     setAiDraftError("");
     try {
@@ -1582,21 +1623,91 @@ export default function TasksScreen() {
       });
 
       if (res.success && res.draft) {
-        setTitle(res.draft.title || title.trim());
-        setDescription(res.draft.description || description);
-        setPriority(res.draft.priority || "medium");
-        setCreateEstimatedHours(String(res.draft.estimatedHours || 0));
-        setAiChecklist(res.draft.checklist || []);
-        if (res.draft.labels?.length) {
-          setCreateLabels((prev) => Array.from(new Set([...prev, ...res.draft.labels])));
-        }
+        applyDraft(res.draft);
       } else {
-        setAiDraftError("Could not generate a draft.");
+        fallbackDraft();
       }
     } catch (err: any) {
-      setAiDraftError(err?.response?.data?.message || "AI draft failed.");
+      fallbackDraft();
     } finally {
       setAiDraftLoading(false);
+    }
+  };
+
+  const handleGenerateTaskSummary = async () => {
+    if (!selectedTask) return;
+
+    const buildFallbackSummary = (): TaskSummary => {
+      const subtasks = selectedTask.subtasks || [];
+      const openSubtasks = subtasks.filter((sub) => !sub.isCompleted).map((sub) => sub.title).slice(0, 3);
+      const completedCount = subtasks.filter((sub) => sub.isCompleted).length;
+      const progressText = subtasks.length ? ` Checklist progress is ${completedCount}/${subtasks.length}.` : "";
+      const summaryText = selectedTask.description?.trim()
+        ? `${selectedTask.description.trim()}${progressText}`
+        : `"${selectedTask.title}" is currently marked ${selectedTask.status}.${progressText}`;
+
+      return {
+        summary: summaryText,
+        nextSteps: openSubtasks.length ? openSubtasks : ["Confirm the next action", "Move the task toward the next status"],
+        blockers: comments.some((comment) => /block|stuck|issue|error|fail/i.test(comment.content))
+          ? ["Recent comments may mention a blocker. Review the discussion."]
+          : [],
+      };
+    };
+
+    setAiSummaryLoading(true);
+    setAiSummaryError("");
+    try {
+      const res = await generateTaskSummary({
+        title: selectedTask.title,
+        description: selectedTask.description,
+        status: selectedTask.status,
+        priority: selectedTask.priority,
+        labels: selectedTask.labels || [],
+        subtasks: selectedTask.subtasks || [],
+        comments: comments.map((comment) => comment.content),
+      });
+
+      if (res.success && res.summary) {
+        setAiTaskSummary(res.summary);
+      } else {
+        setAiTaskSummary(buildFallbackSummary());
+        setAiSummaryError("Using quick summary. Deploy backend AI route for NVIDIA output.");
+      }
+    } catch {
+      setAiTaskSummary(buildFallbackSummary());
+      setAiSummaryError("Using quick summary. Deploy backend AI route for NVIDIA output.");
+    } finally {
+      setAiSummaryLoading(false);
+    }
+  };
+
+  const handlePolishComment = async () => {
+    if (!selectedTask || !newCommentContent.trim()) return;
+
+    const fallbackPolish = () => {
+      const cleaned = newCommentContent.replace(/\s+/g, " ").trim();
+      if (!cleaned) return;
+      const withCapital = cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
+      setNewCommentContent(/[.!?]$/.test(withCapital) ? withCapital : `${withCapital}.`);
+    };
+
+    setCommentPolishLoading(true);
+    try {
+      const res = await rewriteComment({
+        content: newCommentContent,
+        taskTitle: selectedTask.title,
+      });
+
+      if (res.success && res.content) {
+        setNewCommentContent(res.content);
+      } else {
+        fallbackPolish();
+      }
+    } catch {
+      fallbackPolish();
+    } finally {
+      setCommentPolishLoading(false);
     }
   };
 
@@ -2365,6 +2476,8 @@ export default function TasksScreen() {
     setEditDescText(task.description || "");
     setIsEditingDesc(false);
     setMemberSearchQuery("");
+    setAiTaskSummary(null);
+    setAiSummaryError("");
     setDetailModalVisible(true);
 
     try {
@@ -3637,6 +3750,56 @@ export default function TasksScreen() {
                   </View>
                 )}
 
+                <View style={{ marginTop: 20, marginBottom: 4 }}>
+                  <SectionLabel>AI summary</SectionLabel>
+                  <TouchableOpacity
+                    onPress={handleGenerateTaskSummary}
+                    disabled={aiSummaryLoading}
+                    style={[s.aiDraftBtn, aiSummaryLoading && { opacity: 0.65 }, { marginBottom: aiTaskSummary ? 10 : 16 }]}
+                  >
+                    <View style={s.aiDraftIcon}>
+                      {aiSummaryLoading ? (
+                        <ActivityIndicator size="small" color={C.onAccent} />
+                      ) : (
+                        <Ionicons name="sparkles" size={16} color={C.onAccent} />
+                      )}
+                    </View>
+                    <View style={s.flex}>
+                      <Text style={s.aiDraftTitle}>{aiSummaryLoading ? "Reading task..." : "Summarize with AI"}</Text>
+                      <Text style={s.aiDraftSubtitle}>Quick context, next steps and blockers</Text>
+                    </View>
+                    <Ionicons name="chevron-forward" size={18} color={C.textMuted} />
+                  </TouchableOpacity>
+                  {aiSummaryError ? <Text style={s.aiDraftError}>{aiSummaryError}</Text> : null}
+                  {aiTaskSummary && (
+                    <View style={s.aiSummaryBox}>
+                      <Text style={s.aiSummaryText}>{aiTaskSummary.summary}</Text>
+                      {aiTaskSummary.nextSteps.length > 0 && (
+                        <View style={{ marginTop: 10 }}>
+                          <Text style={s.aiSummaryHeading}>Next steps</Text>
+                          {aiTaskSummary.nextSteps.map((step, idx) => (
+                            <View key={`${step}-${idx}`} style={s.aiChecklistRow}>
+                              <Ionicons name="arrow-forward-circle-outline" size={15} color={C.accent} />
+                              <Text style={s.aiChecklistText}>{step}</Text>
+                            </View>
+                          ))}
+                        </View>
+                      )}
+                      {aiTaskSummary.blockers.length > 0 && (
+                        <View style={{ marginTop: 10 }}>
+                          <Text style={s.aiSummaryHeading}>Possible blockers</Text>
+                          {aiTaskSummary.blockers.map((blocker, idx) => (
+                            <View key={`${blocker}-${idx}`} style={s.aiChecklistRow}>
+                              <Ionicons name="alert-circle-outline" size={15} color={C.warn} />
+                              <Text style={s.aiChecklistText}>{blocker}</Text>
+                            </View>
+                          ))}
+                        </View>
+                      )}
+                    </View>
+                  )}
+                </View>
+
                 {/* Description */}
                 <View style={{ marginTop: 20, marginBottom: 20 }}>
                   <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
@@ -4418,6 +4581,20 @@ export default function TasksScreen() {
                       </TouchableOpacity>
                     </View>
                   )}
+                  {!isViewer && (
+                    <TouchableOpacity
+                      onPress={handlePolishComment}
+                      disabled={commentPolishLoading || !newCommentContent.trim()}
+                      style={[s.commentPolishBtn, (!newCommentContent.trim() || commentPolishLoading) && { opacity: 0.55 }]}
+                    >
+                      {commentPolishLoading ? (
+                        <ActivityIndicator size="small" color={C.accent} />
+                      ) : (
+                        <Ionicons name="sparkles" size={15} color={C.accent} />
+                      )}
+                      <Text style={s.commentPolishText}>{commentPolishLoading ? "Polishing..." : "Polish with AI"}</Text>
+                    </TouchableOpacity>
+                  )}
                   {!isViewer && <View style={{ marginBottom: 8 }}>{renderMentionSuggestions("newComment")}</View>}
 
                   {loadingComments ? (
@@ -4660,12 +4837,15 @@ const s = StyleSheet.create({
   aiDraftIcon: { width: 30, height: 30, borderRadius: 10, backgroundColor: C.accent, alignItems: "center", justifyContent: "center" },
   aiDraftTitle: { color: C.textPrimary, fontSize: 13, fontWeight: "700" },
   aiDraftSubtitle: { color: C.textMuted, fontSize: 11, marginTop: 2 },
-  aiDraftError: { color: C.danger, fontSize: 12, marginTop: -8, marginBottom: 12 },
+  aiDraftError: { color: C.textMuted, fontSize: 12, marginTop: -8, marginBottom: 12 },
   aiChecklistBox: { backgroundColor: C.card, borderWidth: 1, borderColor: C.border, borderRadius: 14, padding: 12, marginBottom: 16 },
   aiChecklistTitle: { color: C.textPrimary, fontSize: 13, fontWeight: "700" },
   aiEstimateText: { color: C.accentText, fontSize: 11, fontWeight: "700" },
   aiChecklistRow: { flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 5 },
   aiChecklistText: { flex: 1, color: C.textSecondary, fontSize: 12, lineHeight: 17 },
+  aiSummaryBox: { backgroundColor: C.card, borderWidth: 1, borderColor: C.border, borderRadius: 14, padding: 12, marginBottom: 16 },
+  aiSummaryText: { color: C.textPrimary, fontSize: 13, lineHeight: 19 },
+  aiSummaryHeading: { color: C.textMuted, fontSize: 10, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 },
 
   // Offline banner
   offlineBanner: { backgroundColor: C.warn, paddingVertical: 6, paddingHorizontal: 16, flexDirection: "row", alignItems: "center", justifyContent: "center" },
@@ -4848,6 +5028,8 @@ const s = StyleSheet.create({
   commentComposerInputWrap: { backgroundColor: C.card, borderRadius: 18, paddingHorizontal: 16, paddingVertical: 4, minHeight: 44, justifyContent: "center" },
   commentComposerInput: { color: C.textPrimary, fontSize: 14, paddingVertical: 8, maxHeight: 100 },
   commentSendBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: C.accent, alignItems: "center", justifyContent: "center" },
+  commentPolishBtn: { alignSelf: "flex-start", flexDirection: "row", alignItems: "center", gap: 7, backgroundColor: C.accentBg, borderWidth: 1, borderColor: C.accentBorder, borderRadius: 12, paddingHorizontal: 11, paddingVertical: 8, marginBottom: 8 },
+  commentPolishText: { color: C.accentText, fontSize: 12, fontWeight: "700" },
   mentionPopover: { backgroundColor: C.card, borderRadius: 12, padding: 6, marginBottom: 10, maxHeight: 160, overflow: "hidden", shadowColor: "#000", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.25, shadowRadius: 8, elevation: 5, zIndex: 999 },
   mentionPopoverLabel: { color: C.textMuted, fontSize: 9, fontWeight: "700", paddingHorizontal: 8, paddingVertical: 6 },
   mentionRow: { flexDirection: "row", alignItems: "center", paddingVertical: 8, paddingHorizontal: 8, borderRadius: 9, marginVertical: 1, gap: 8 },

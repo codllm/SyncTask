@@ -131,6 +131,9 @@ const updateTaskService = (taskId, data, updaterId) => __awaiter(void 0, void 0,
         throw new Error("Task not found");
     }
     const { newAttachments } = data, updateData = __rest(data, ["newAttachments"]);
+    const attachmentsToAdd = Array.isArray(newAttachments) && newAttachments.length > 0
+        ? newAttachments.map((attachment) => (Object.assign(Object.assign({}, attachment), { uploadedBy: attachment.uploadedBy || updaterId })))
+        : [];
     if (updateData.recurring && updateData.recurring.isRecurring && !updateData.recurring.nextRun) {
         updateData.recurring.nextRun = (0, scheduler_1.calculateNextRun)(updateData.recurring.frequency);
     }
@@ -190,8 +193,8 @@ const updateTaskService = (taskId, data, updaterId) => __awaiter(void 0, void 0,
         updateData.position = targetPos;
     }
     let updateQuery = { $set: updateData };
-    if (newAttachments && newAttachments.length > 0) {
-        updateQuery.$push = { attachments: { $each: newAttachments } };
+    if (attachmentsToAdd.length > 0) {
+        updateQuery.$push = { attachments: { $each: attachmentsToAdd } };
     }
     const updatedTask = yield task_model_1.default.findByIdAndUpdate(taskId, updateQuery, { new: true })
         .populate("assignedTo", "username email")
@@ -237,9 +240,9 @@ const updateTaskService = (taskId, data, updaterId) => __awaiter(void 0, void 0,
     }
     // Notify other task members about general task updates or attachments
     const assigneesList = updatedTask.assignedTo ? updatedTask.assignedTo.map(a => a._id.toString()) : [];
-    if (newAttachments && newAttachments.length > 0) {
+    if (attachmentsToAdd.length > 0) {
         const title = "New Attachment on Task";
-        const message = `${newAttachments.length} new file(s) uploaded to task "${updatedTask.title}"`;
+        const message = `${attachmentsToAdd.length} new file(s) uploaded to task "${updatedTask.title}"`;
         const link = `/projects/${updatedTask.project}/tasks/${updatedTask._id}`;
         for (const assigneeId of assigneesList) {
             if (assigneeId !== updaterId) {

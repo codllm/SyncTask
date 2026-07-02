@@ -8,6 +8,7 @@ const app_1 = __importDefault(require("./app"));
 const socket_1 = require("./services/socket");
 const scheduler_1 = require("./services/scheduler");
 const dotenv_1 = __importDefault(require("dotenv"));
+dotenv_1.default.config({ path: ".env.local" });
 dotenv_1.default.config();
 const db_1 = __importDefault(require("./config/db"));
 const server = http_1.default.createServer(app_1.default);

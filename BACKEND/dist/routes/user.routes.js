@@ -41,14 +41,12 @@ router.post("/login", [
     (0, express_validator_1.body)("email").isEmail().withMessage("Invalid email format").notEmpty(),
     (0, express_validator_1.body)("password").isLength({ min: 3 }).withMessage("Password must be at least 3 characters long").notEmpty(),
 ], user_controller_1.login);
-router.post("/update", [
-    (0, express_validator_1.body)("email").isEmail().withMessage("Invalid email format").notEmpty(),
-    (0, express_validator_1.body)("phone").isNumeric().withMessage("Phone must be a number").notEmpty(),
-], auth_middleware_1.userauth, user_controller_1.updateUserProfile);
+router.post("/update", auth_middleware_1.userauth, user_controller_1.updateUserProfile);
 router.get('/forget-password', [
     (0, express_validator_1.body)("email").isEmail().withMessage("Invalid email format").notEmpty(),
 ], user_controller_1.forgetPass);
 router.get("/profile", auth_middleware_1.userauth, user_controller_1.profile);
+router.put("/profile", auth_middleware_1.userauth, user_controller_1.updateUserProfile);
 router.put("/preferences", auth_middleware_1.userauth, user_controller_1.updatePreferences);
 router.put("/theme", auth_middleware_1.userauth, user_controller_1.updateThemeColorController);
 router.post("/logout", auth_middleware_1.userauth, user_controller_1.logout);

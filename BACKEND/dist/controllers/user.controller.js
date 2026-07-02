@@ -72,20 +72,39 @@ const profile = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
 });
 exports.profile = profile;
 const updateUserProfile = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
-    const errors = (0, express_validator_1.validationResult)(req);
-    if (!errors.isEmpty()) {
-        return res.status(400).json({ errors: errors.array() });
-    }
-    const { email, phone } = req.body;
+    var _a, _b, _c;
     try {
-        const updatedUser = yield (0, user_service_1.updateUser)({ email, phone });
-        if (!updatedUser) {
-            return res.status(404).json({ message: "User not found" });
+        const userId = (_a = req.user) === null || _a === void 0 ? void 0 : _a._id;
+        const { username, firstname, lastname, phone, age, gender } = req.body;
+        const update = {};
+        const nextFirstname = (_b = username === null || username === void 0 ? void 0 : username.firstname) !== null && _b !== void 0 ? _b : firstname;
+        const nextLastname = (_c = username === null || username === void 0 ? void 0 : username.lastname) !== null && _c !== void 0 ? _c : lastname;
+        if (nextFirstname !== undefined)
+            update["username.firstname"] = String(nextFirstname).trim();
+        if (nextLastname !== undefined)
+            update["username.lastname"] = String(nextLastname).trim();
+        if (age !== undefined)
+            update.age = age;
+        if (gender !== undefined)
+            update.gender = gender;
+        if (phone !== undefined) {
+            const parsedPhone = Number(phone);
+            if (Number.isNaN(parsedPhone)) {
+                return res.status(400).json({ success: false, message: "Phone must be a number" });
+            }
+            update.phone = parsedPhone;
         }
-        return res.status(200).json({ user: updatedUser });
+        if (Object.keys(update).length === 0) {
+            return res.status(400).json({ success: false, message: "No profile fields provided" });
+        }
+        const updatedUser = yield user_model_1.default.findByIdAndUpdate(userId, { $set: update }, { new: true });
+        if (!updatedUser) {
+            return res.status(404).json({ success: false, message: "User not found" });
+        }
+        return res.status(200).json({ success: true, user: updatedUser });
     }
     catch (error) {
-        return res.status(500).json({ message: error.message });
+        return res.status(500).json({ success: false, message: error.message });
     }
 });
 exports.updateUserProfile = updateUserProfile;
@@ -104,9 +123,10 @@ const logout = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     var _a;
     const token = (_a = req.headers.authorization) === null || _a === void 0 ? void 0 : _a.split(" ")[1]; // Extract token from header
     if (!token) {
-        return res.status(400).json({ message: "Token is required for logout" });
+        return res.status(400).json({ success: false, message: "Token is required for logout" });
     }
     console.log("Logout token:", token); // Debugging log
+    return res.status(200).json({ success: true, message: "Logged out successfully" });
 });
 exports.logout = logout;
 const updatePreferences = (req, res) => __awaiter(void 0, void 0, void 0, function* () {

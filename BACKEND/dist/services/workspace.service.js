@@ -17,8 +17,6 @@ const workspace_model_1 = __importDefault(require("../model/workspace.model"));
 const project_model_1 = __importDefault(require("../model/project.model"));
 const mongoose_1 = __importDefault(require("mongoose"));
 const notification_service_1 = require("./notification.service");
-const demo_service_1 = require("./demo.service");
-const user_model_1 = __importDefault(require("../model/user.model"));
 // CREATE WORKSPACE
 const createWorkspace = (_a) => __awaiter(void 0, [_a], void 0, function* ({ name, description, owner, }) {
     const workspace = yield workspace_model_1.default.create({
@@ -58,7 +56,7 @@ const getUserWorkspaces = (userId) => __awaiter(void 0, void 0, void 0, function
         yield project_model_1.default.deleteMany({ workspace: { $in: personalIds } });
         yield workspace_model_1.default.deleteMany({ _id: { $in: personalIds } });
     }
-    let workspaces = yield workspace_model_1.default.find({
+    const workspaces = yield workspace_model_1.default.find({
         members: {
             $elemMatch: {
                 user: userId,
@@ -68,27 +66,6 @@ const getUserWorkspaces = (userId) => __awaiter(void 0, void 0, void 0, function
     })
         .populate("owner")
         .populate("members.user");
-    if (workspaces.length === 0) {
-        // Check if the user has already had their demo workspaces seeded
-        const user = yield user_model_1.default.findById(userId);
-        if (user && !user.demoSeeded) {
-            // Automatically seed two dummy workspaces with projects/tasks for first-time or empty users!
-            yield (0, demo_service_1.seedDemoWorkspacesForUser)(userId);
-            user.demoSeeded = true;
-            yield user.save();
-            // Refetch the newly created demo workspaces
-            workspaces = yield workspace_model_1.default.find({
-                members: {
-                    $elemMatch: {
-                        user: userId,
-                        status: { $ne: "pending" },
-                    },
-                },
-            })
-                .populate("owner")
-                .populate("members.user");
-        }
-    }
     return workspaces;
 });
 exports.getUserWorkspaces = getUserWorkspaces;
