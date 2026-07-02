@@ -79,6 +79,7 @@ export interface CreateTaskPayload {
   dueDate?: string | null;
   startDate?: string | null;
   assignedTo?: string | string[];
+  subtasks?: SubTask[];
   labels?: string[];
   dependencies?: string[];
   recurring?: {

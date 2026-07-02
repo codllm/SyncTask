@@ -15,6 +15,7 @@ import uploadRoutes from "./routes/upload.routes";
 import activityRoutes from "./routes/activity.routes";
 import milestoneRoutes from "./routes/milestone.routes";
 import todoRoutes from "./routes/todo.routes";
+import aiRoutes from "./routes/ai.routes";
 
 const app = express();
 
@@ -38,5 +39,6 @@ app.use("/api/upload", uploadRoutes);
 app.use("/api/activities", activityRoutes);
 app.use("/api/milestones", milestoneRoutes);
 app.use("/api/todos", todoRoutes);
+app.use("/api/ai", aiRoutes);
 
 export default app;

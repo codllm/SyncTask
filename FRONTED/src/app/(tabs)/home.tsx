@@ -107,6 +107,7 @@ export default function HomeScreen() {
     C,
     todoMode,
     setTodoMode,
+    workspacesLoading,
   } = useApp();
 
   const [stats, setStats] = useState({ total: 0, completed: 0, inProgress: 0 });
@@ -542,6 +543,14 @@ export default function HomeScreen() {
 
   if (todoMode) {
     return <TodoModeHomeView />;
+  }
+
+  if (workspacesLoading) {
+    return (
+      <SafeAreaView style={{ flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: T.bg }}>
+        <ActivityIndicator size="large" color={T.accent} />
+      </SafeAreaView>
+    );
   }
 
   // ─── Empty workspace state ──────────────────────────────────────────────────

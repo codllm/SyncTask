@@ -22,7 +22,6 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import * as WebBrowser from "expo-web-browser";
 import { useApp } from "../../context/AppContext";
 import {
   getProjectTasks,
@@ -38,6 +37,7 @@ import {
   deleteTaskPermanently,
   Task,
   SubTask,
+  Attachment,
 } from "../../api/task.api";
 import {
   cacheData,
@@ -74,6 +74,7 @@ import * as DocumentPicker from "expo-document-picker";
 import { uploadFile } from "../../api/upload.api";
 import { ConfirmDialog, ConfirmDialogAction } from "../../components/ConfirmDialog";
 import { createUploadFormData } from "../../utils/uploadFormData";
+import { generateTaskDraft } from "../../api/ai.api";
 import { useRouter } from "expo-router";
 import { TodoModeTasksView } from "../../Screen/TodoMode";
 
@@ -967,7 +968,7 @@ export default function TasksScreen() {
   const [memberSearchQuery, setMemberSearchQuery] = useState("");
   const [isEditingDesc, setIsEditingDesc] = useState(false);
   const [editDescText, setEditDescText] = useState("");
-  const [previewAttachment, setPreviewAttachment] = useState<{ name: string; url: string; fileType: string } | null>(null);
+  const [previewAttachment, setPreviewAttachment] = useState<Attachment | null>(null);
   const [pendingAttachment, setPendingAttachment] = useState<{ uri: string; name: string; mimeType: string } | null>(null);
   const [attachmentDescription, setAttachmentDescription] = useState("");
   const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
@@ -1013,6 +1014,7 @@ export default function TasksScreen() {
 
   // Time logging and Start date states
   const [estimatedHours, setEstimatedHours] = useState("0");
+  const [createEstimatedHours, setCreateEstimatedHours] = useState("0");
   const [startDate, setStartDate] = useState("");
   const [loggedHours, setLoggedHours] = useState("");
   const [logDescription, setLogDescription] = useState("");
@@ -1431,6 +1433,9 @@ export default function TasksScreen() {
   const [createRecurringFrequency, setCreateRecurringFrequency] = useState<"none" | "daily" | "weekly" | "monthly">("none");
   const [createDependencies, setCreateDependencies] = useState<string[]>([]);
   const [creating, setCreating] = useState(false);
+  const [aiDraftLoading, setAiDraftLoading] = useState(false);
+  const [aiDraftError, setAiDraftError] = useState("");
+  const [aiChecklist, setAiChecklist] = useState<string[]>([]);
 
   // Detail
   const [newSubtaskTitle, setNewSubtaskTitle] = useState("");
@@ -1560,6 +1565,41 @@ export default function TasksScreen() {
     );
   };
 
+  const handleGenerateDraft = async () => {
+    if (!title.trim()) {
+      setAiDraftError("Add a title first.");
+      return;
+    }
+
+    setAiDraftLoading(true);
+    setAiDraftError("");
+    try {
+      const res = await generateTaskDraft({
+        title: title.trim(),
+        projectName: activeProject?.name,
+        workspaceName: activeWorkspace?.name,
+        existingTasks: tasks.map((t) => t.title),
+      });
+
+      if (res.success && res.draft) {
+        setTitle(res.draft.title || title.trim());
+        setDescription(res.draft.description || description);
+        setPriority(res.draft.priority || "medium");
+        setCreateEstimatedHours(String(res.draft.estimatedHours || 0));
+        setAiChecklist(res.draft.checklist || []);
+        if (res.draft.labels?.length) {
+          setCreateLabels((prev) => Array.from(new Set([...prev, ...res.draft.labels])));
+        }
+      } else {
+        setAiDraftError("Could not generate a draft.");
+      }
+    } catch (err: any) {
+      setAiDraftError(err?.response?.data?.message || "AI draft failed.");
+    } finally {
+      setAiDraftLoading(false);
+    }
+  };
+
   const [customLabelInput, setCustomLabelInput] = useState("");
   const [createLabels, setCreateLabels] = useState<string[]>([]);
 
@@ -1659,9 +1699,11 @@ export default function TasksScreen() {
         dueDate: dueDate.trim() || undefined,
         startDate: startDate.trim() || undefined,
         assignedTo: assignedTo.length > 0 ? assignedTo : undefined,
+        subtasks: aiChecklist.map((item) => ({ title: item, isCompleted: false })),
         labels: createLabels,
         dependencies: createDependencies.length > 0 ? createDependencies : undefined,
         recurring: createRecurringFrequency !== "none" ? { isRecurring: true, frequency: createRecurringFrequency } : undefined,
+        estimatedHours: Number(createEstimatedHours) || undefined,
       });
       if (res.success) {
         setTitle("");
@@ -1670,6 +1712,9 @@ export default function TasksScreen() {
         setDueDate("");
         setStartDate("");
         setAssignedTo([]);
+        setCreateEstimatedHours("0");
+        setAiChecklist([]);
+        setAiDraftError("");
         setCreateRecurringFrequency("none");
         setCreateDependencies([]);
         setCreateModalVisible(false);
@@ -2190,7 +2235,20 @@ export default function TasksScreen() {
 
   const pickDocument = async () => {
     try {
-      const result = await DocumentPicker.getDocumentAsync({ type: ["application/pdf", "image/*"], copyToCacheDirectory: true });
+      const result = await DocumentPicker.getDocumentAsync({
+        type: [
+          "application/pdf",
+          "image/*",
+          "text/*",
+          "application/msword",
+          "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+          "application/vnd.ms-excel",
+          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+          "application/vnd.ms-powerpoint",
+          "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        ],
+        copyToCacheDirectory: true,
+      });
       if (!result.canceled && result.assets?.[0]) {
         const a = result.assets[0];
         const name = a.name || "document.pdf";
@@ -2202,6 +2260,49 @@ export default function TasksScreen() {
     }
   };
 
+  function isImageAttachment(attachment?: Pick<Attachment, "name" | "fileType"> | null) {
+    if (!attachment) return false;
+    return (
+      attachment.fileType?.startsWith("image/") ||
+      /\.(jpg|jpeg|png|gif|webp|heic|heif)$/i.test(attachment.name || "")
+    );
+  }
+
+  async function openAttachmentExternally(attachment: Attachment) {
+    if (!attachment.url) return;
+    try {
+      if (Platform.OS === "web") {
+        window.open(attachment.url, "_blank", "noopener,noreferrer");
+        return;
+      }
+
+      const canOpen = await Linking.canOpenURL(attachment.url);
+      if (!canOpen) {
+        Alert.alert("Cannot open file", "No app is available to open this attachment.");
+        return;
+      }
+      await Linking.openURL(attachment.url);
+    } catch (err) {
+      console.error("Attachment open error:", err);
+      Alert.alert("Cannot open file", "Could not open this attachment on your device.");
+    }
+  }
+
+  async function handleAttachmentPress(attachment: Attachment, options?: { autoOpenedAfterUpload?: boolean }) {
+    if (!attachment.url) return;
+
+    if (isImageAttachment(attachment)) {
+      setAttachmentsModalVisible(false);
+      setPreviewAttachment(attachment);
+      return;
+    }
+
+    if (options?.autoOpenedAfterUpload) {
+      setAttachmentsModalVisible(false);
+    }
+    await openAttachmentExternally(attachment);
+  }
+
   const handleUpload = async (uri: string, name: string, mimeType: string, desc?: string, file?: File) => {
     if (!selectedTask) return;
     setUploading(true);
@@ -2209,20 +2310,26 @@ export default function TasksScreen() {
       const formData = await createUploadFormData({ uri, name, type: mimeType, file });
       const res = await uploadFile(formData);
       if (res.success) {
+        const uploadedAttachment: Attachment = {
+          name: res.name || name,
+          url: res.url,
+          fileType: res.fileType || mimeType,
+          uploadedBy: user?._id,
+          description: desc?.trim() || undefined,
+        };
         const updateRes = await updateTask(selectedTask._id, {
-          newAttachments: [{
-            name: res.name || name,
-            url: res.url,
-            fileType: res.fileType || mimeType,
-            uploadedBy: user?._id,
-            description: desc?.trim() || undefined,
-          }],
+          newAttachments: [uploadedAttachment],
         });
         if (updateRes.success) {
           setSelectedTask(updateRes.task);
           setTasks((prev) => prev.map((t) => (t._id === updateRes.task._id ? updateRes.task : t)));
           setPendingAttachment(null);
           setAttachmentDescription("");
+          const savedAttachment =
+            updateRes.task.attachments?.find((att) => att.url === uploadedAttachment.url) ||
+            updateRes.task.attachments?.[updateRes.task.attachments.length - 1] ||
+            uploadedAttachment;
+          await handleAttachmentPress(savedAttachment, { autoOpenedAfterUpload: true });
         } else {
           Alert.alert("Error", "Failed to attach file to task.");
         }
@@ -3170,6 +3277,30 @@ export default function TasksScreen() {
                 />
               </View>
 
+              <TouchableOpacity
+                onPress={handleGenerateDraft}
+                disabled={aiDraftLoading || !title.trim()}
+                activeOpacity={0.8}
+                style={[
+                  s.aiDraftBtn,
+                  (!title.trim() || aiDraftLoading) && { opacity: 0.55 },
+                ]}
+              >
+                <View style={s.aiDraftIcon}>
+                  {aiDraftLoading ? (
+                    <ActivityIndicator size="small" color={C.onAccent} />
+                  ) : (
+                    <Ionicons name="sparkles" size={15} color={C.onAccent} />
+                  )}
+                </View>
+                <View style={s.flex}>
+                  <Text style={s.aiDraftTitle}>{aiDraftLoading ? "Drafting task..." : "Draft with AI"}</Text>
+                  <Text style={s.aiDraftSubtitle}>Description, checklist, labels and estimate</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={16} color={C.textMuted} />
+              </TouchableOpacity>
+              {aiDraftError ? <Text style={s.aiDraftError}>{aiDraftError}</Text> : null}
+
               <SectionLabel>Description</SectionLabel>
               <MarkdownToolbar onInsert={(syntax) => handleInsertMarkdown(syntax, false)} />
               <View style={[s.inputWrap, s.inputMultiline, { marginBottom: 16 }]}>
@@ -3183,6 +3314,28 @@ export default function TasksScreen() {
                 />
               </View>
               {renderMentionSuggestions("createDesc")}
+
+              {aiChecklist.length > 0 && (
+                <View style={s.aiChecklistBox}>
+                  <View style={[s.row, { justifyContent: "space-between", marginBottom: 8 }]}>
+                    <Text style={s.aiChecklistTitle}>Generated checklist</Text>
+                    <View style={[s.row, { gap: 10 }]}>
+                      {Number(createEstimatedHours) > 0 ? (
+                        <Text style={s.aiEstimateText}>{createEstimatedHours}h estimate</Text>
+                      ) : null}
+                      <TouchableOpacity onPress={() => setAiChecklist([])}>
+                        <Text style={s.smallActionBtnText}>Clear</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                  {aiChecklist.map((item, idx) => (
+                    <View key={`${item}-${idx}`} style={s.aiChecklistRow}>
+                      <Ionicons name="checkmark-circle-outline" size={15} color={C.accent} />
+                      <Text style={s.aiChecklistText}>{item}</Text>
+                    </View>
+                  ))}
+                </View>
+              )}
 
               <SectionLabel>Priority</SectionLabel>
               <View style={[s.row, { gap: 8, marginBottom: 16 }]}>
@@ -3824,7 +3977,7 @@ export default function TasksScreen() {
                         return (
                           <TouchableOpacity
                             key={idx}
-                            onPress={() => att.url && setPreviewAttachment(att)}
+                            onPress={() => handleAttachmentPress(att)}
                             style={{
                               flexDirection: "row",
                               alignItems: "center",
@@ -3998,39 +4151,21 @@ export default function TasksScreen() {
       {/* ── Modal: Attachment Preview ────────────────────────────────────── */}
       <Modal visible={previewAttachment !== null} transparent animationType="fade" onRequestClose={() => setPreviewAttachment(null)}>
         <View style={s.previewOverlay}>
-          <View style={s.previewCard}>
-            <View style={s.previewHeader}>
-              <View style={{ flex: 1, marginRight: 10 }}>
-                <Text style={s.previewTitle} numberOfLines={1}>{previewAttachment?.name}</Text>
-                <Text style={s.previewSubtitle}>{previewAttachment?.fileType.toUpperCase()}</Text>
-              </View>
-              <TouchableOpacity onPress={() => setPreviewAttachment(null)} style={{ padding: 4 }}>
-                <Ionicons name="close" size={22} color={C.textSecondary} />
-              </TouchableOpacity>
-            </View>
-
-            <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
-              {previewAttachment && (previewAttachment.fileType.startsWith("image/") || /\.(jpg|jpeg|png|gif)$/i.test(previewAttachment.name)) ? (
-                <Image source={{ uri: previewAttachment.url }} style={{ width: "100%", height: "100%", borderRadius: 12 }} resizeMode="contain" />
-              ) : (
-                <View style={{ alignItems: "center", gap: 16, padding: 20 }}>
-                  <Ionicons name="document-text-outline" size={72} color={C.accent} />
-                  <Text style={s.previewFallbackTitle}>No inline preview available for this file type</Text>
-                  <Text style={s.previewFallbackHint}>You can open it in an external viewer or browser.</Text>
-                  <TouchableOpacity
-                    onPress={() => previewAttachment?.url && Linking.openURL(previewAttachment.url)}
-                    style={s.previewOpenBtn}
-                  >
-                    <Text style={s.previewOpenBtnText}>Open in browser</Text>
-                  </TouchableOpacity>
-                </View>
-              )}
-            </View>
-
-            <TouchableOpacity onPress={() => setPreviewAttachment(null)} style={[s.secondaryBtn, { marginTop: 16 }]}>
-              <Text style={s.secondaryBtnText}>Close preview</Text>
+          <View style={s.previewTopBar}>
+            <TouchableOpacity onPress={() => setPreviewAttachment(null)} style={s.previewIconBtn}>
+              <Ionicons name="close" size={22} color="#FFFFFF" />
+            </TouchableOpacity>
+            <Text style={s.previewTitle} numberOfLines={1}>{previewAttachment?.name}</Text>
+            <TouchableOpacity
+              onPress={() => previewAttachment && openAttachmentExternally(previewAttachment)}
+              style={s.previewIconBtn}
+            >
+              <Ionicons name="open-outline" size={20} color="#FFFFFF" />
             </TouchableOpacity>
           </View>
+          {previewAttachment ? (
+            <Image source={{ uri: previewAttachment.url }} style={s.previewImage} resizeMode="contain" />
+          ) : null}
         </View>
       </Modal>
 
@@ -4427,7 +4562,7 @@ export default function TasksScreen() {
                       {selectedTask.attachments.map((att, idx) => {
                         const isImage = att.fileType?.startsWith("image/") || (att.name && /\.(jpg|jpeg|png|gif)$/i.test(att.name));
                         return (
-                          <TouchableOpacity key={idx} onPress={() => att.url && setPreviewAttachment(att)} style={s.attachmentRow}>
+                          <TouchableOpacity key={idx} onPress={() => handleAttachmentPress(att)} style={s.attachmentRow}>
                             {isImage ? (
                               <Image source={{ uri: att.url }} style={s.attachmentThumb} resizeMode="cover" />
                             ) : (
@@ -4439,7 +4574,7 @@ export default function TasksScreen() {
                               <Text style={s.attachmentName} numberOfLines={1}>{att.name}</Text>
                               <Text style={s.attachmentType}>{att.fileType.split("/")[1]?.toUpperCase() || "FILE"}</Text>
                             </View>
-                            <Ionicons name="eye-outline" size={14} color={C.accent} />
+                            <Ionicons name={isImage ? "eye-outline" : "open-outline"} size={14} color={C.accent} />
                           </TouchableOpacity>
                         );
                       })}
@@ -4521,6 +4656,16 @@ const s = StyleSheet.create({
   filterBtnText: { fontSize: 12, fontWeight: "600" },
   addTaskBtn: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 12, paddingVertical: 9, borderRadius: 10, backgroundColor: C.accent },
   addTaskBtnText: { fontSize: 13, fontWeight: "700", color: C.onAccent },
+  aiDraftBtn: { flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: C.card, borderWidth: 1, borderColor: C.accentBorder, borderRadius: 14, paddingHorizontal: 12, paddingVertical: 11, marginBottom: 16 },
+  aiDraftIcon: { width: 30, height: 30, borderRadius: 10, backgroundColor: C.accent, alignItems: "center", justifyContent: "center" },
+  aiDraftTitle: { color: C.textPrimary, fontSize: 13, fontWeight: "700" },
+  aiDraftSubtitle: { color: C.textMuted, fontSize: 11, marginTop: 2 },
+  aiDraftError: { color: C.danger, fontSize: 12, marginTop: -8, marginBottom: 12 },
+  aiChecklistBox: { backgroundColor: C.card, borderWidth: 1, borderColor: C.border, borderRadius: 14, padding: 12, marginBottom: 16 },
+  aiChecklistTitle: { color: C.textPrimary, fontSize: 13, fontWeight: "700" },
+  aiEstimateText: { color: C.accentText, fontSize: 11, fontWeight: "700" },
+  aiChecklistRow: { flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 5 },
+  aiChecklistText: { flex: 1, color: C.textSecondary, fontSize: 12, lineHeight: 17 },
 
   // Offline banner
   offlineBanner: { backgroundColor: C.warn, paddingVertical: 6, paddingHorizontal: 16, flexDirection: "row", alignItems: "center", justifyContent: "center" },
@@ -4841,13 +4986,9 @@ const s = StyleSheet.create({
   colorSwatch: { width: 28, height: 28, borderRadius: 14, borderWidth: 2, borderColor: "transparent", alignItems: "center", justifyContent: "center" },
 
   // Attachment preview modal
-  previewOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.9)", justifyContent: "center", alignItems: "center" },
-  previewCard: { width: "90%", height: "80%", backgroundColor: C.surface, borderRadius: 22, padding: 20, justifyContent: "space-between" },
-  previewHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", borderBottomWidth: 1, borderBottomColor: C.border, paddingBottom: 12, marginBottom: 16 },
-  previewTitle: { color: C.textPrimary, fontSize: 15, fontWeight: "700" },
-  previewSubtitle: { color: C.textSecondary, fontSize: 11, marginTop: 2 },
-  previewFallbackTitle: { color: C.textPrimary, fontSize: 14, fontWeight: "600", textAlign: "center" },
-  previewFallbackHint: { color: C.textSecondary, fontSize: 12, textAlign: "center" },
-  previewOpenBtn: { backgroundColor: C.accent, paddingHorizontal: 20, paddingVertical: 12, borderRadius: 12, marginTop: 8 },
-  previewOpenBtnText: { color: C.onAccent, fontWeight: "700", fontSize: 13 },
+  previewOverlay: { flex: 1, backgroundColor: "#050505", justifyContent: "center", alignItems: "center" },
+  previewTopBar: { position: "absolute", top: 0, left: 0, right: 0, zIndex: 2, paddingTop: Platform.OS === "ios" ? 54 : 26, paddingHorizontal: 14, paddingBottom: 12, flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: "rgba(0,0,0,0.45)" },
+  previewIconBtn: { width: 38, height: 38, borderRadius: 19, backgroundColor: "rgba(255,255,255,0.12)", alignItems: "center", justifyContent: "center" },
+  previewTitle: { flex: 1, color: "#FFFFFF", fontSize: 14, fontWeight: "600", textAlign: "center" },
+  previewImage: { width: "100%", height: "100%" },
 });

@@ -4,6 +4,7 @@ import { initSocket } from "./services/socket";
 import { startScheduler } from "./services/scheduler";
 
 import dotenv from "dotenv";
+dotenv.config({ path: ".env.local" });
 dotenv.config();
 import connectDB from "./config/db";
 const server = http.createServer(app);

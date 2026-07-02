@@ -1,8 +1,7 @@
 import "../global.css";
-import { useEffect, useState } from "react";
-import { Stack, useRouter } from "expo-router";
+import { useEffect } from "react";
+import { Stack, usePathname, useRouter } from "expo-router";
 import { View, ActivityIndicator } from "react-native";
-import * as SecureStore from "expo-secure-store";
 
 import { AppProvider, useApp } from "../context/AppContext";
 import { SocketProvider } from "../context/SocketContext";
@@ -11,15 +10,25 @@ import { PushNotificationManager } from "../context/PushNotificationManager";
 function RootLayoutContent() {
   const { token, loading, themeColor } = useApp();
   const router = useRouter();
+  const pathname = usePathname();
 
   useEffect(() => {
     if (loading) return;
+
+    const isAuthRoute =
+      pathname === "/login" ||
+      pathname === "/register" ||
+      pathname.startsWith("/auth") ||
+      pathname.startsWith("/(auth)");
+
     if (token) {
-      router.replace("/(tabs)/home");
-    } else {
+      if (pathname === "/" || isAuthRoute) {
+        router.replace("/(tabs)/home");
+      }
+    } else if (!isAuthRoute) {
       router.replace("/(auth)/login");
     }
-  }, [loading, token]);
+  }, [loading, pathname, router, token]);
 
   if (loading) {
     return (

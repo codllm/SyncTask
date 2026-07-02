@@ -3,8 +3,6 @@ import Workspace from "../model/workspace.model";
 import Project from "../model/project.model";
 import mongoose from "mongoose";
 import { createNotification } from "./notification.service";
-import { seedDemoWorkspacesForUser } from "./demo.service";
-import User from "../model/user.model";
 
 interface CreateWorkspacePayload {
   name: string;
@@ -71,7 +69,7 @@ export const getUserWorkspaces = async (
     await Workspace.deleteMany({ _id: { $in: personalIds } });
   }
 
-  let workspaces = await Workspace.find({
+  const workspaces = await Workspace.find({
     members: {
       $elemMatch: {
         user: userId,
@@ -81,29 +79,6 @@ export const getUserWorkspaces = async (
   })
     .populate("owner")
     .populate("members.user");
-
-  if (workspaces.length === 0) {
-    // Check if the user has already had their demo workspaces seeded
-    const user = await User.findById(userId);
-    if (user && !user.demoSeeded) {
-      // Automatically seed two dummy workspaces with projects/tasks for first-time or empty users!
-      await seedDemoWorkspacesForUser(userId);
-      user.demoSeeded = true;
-      await user.save();
-
-      // Refetch the newly created demo workspaces
-      workspaces = await Workspace.find({
-        members: {
-          $elemMatch: {
-            user: userId,
-            status: { $ne: "pending" },
-          },
-        },
-      })
-        .populate("owner")
-        .populate("members.user");
-    }
-  }
 
   return workspaces;
 };

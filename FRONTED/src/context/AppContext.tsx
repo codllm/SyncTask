@@ -22,6 +22,7 @@ interface AppContextType {
   unreadCount: number;
   setUnreadCount: (count: number) => void;
   loading: boolean;
+  workspacesLoading: boolean;
   themeColor: string;
   setThemeColor: (color: string) => Promise<void>;
   isDarkMode: boolean;
@@ -60,6 +61,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [activeProject, setActiveProject] = useState<Project | null>(null);
   const [unreadCount, setUnreadCount] = useState<number>(0);
   const [loading, setLoading] = useState<boolean>(true);
+  const [workspacesLoading, setWorkspacesLoading] = useState<boolean>(true);
   const [themeColor, setThemeColorState] = useState<string>("#6366F1");
   const [isDarkMode, setIsDarkModeState] = useState<boolean>(true);
   const [todoMode, setTodoModeState] = useState<boolean>(false);
@@ -195,13 +197,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
         
         if (storedToken) {
           setTokenState(storedToken);
-          if (storedUser) {
-            setUserState(JSON.parse(storedUser));
-          } else {
-            // Fetch profile if user data is missing but token exists
+          try {
             const profileRes = await getProfileApi();
             if (profileRes.success) {
               await setUser(profileRes.user);
+            }
+          } catch (profileErr: any) {
+            if (profileErr?.response?.status === 401) {
+              await storage.deleteItemAsync("token");
+              await storage.deleteItemAsync("User");
+              await storage.deleteItemAsync(ACTIVE_WORKSPACE_KEY);
+              setTokenState(null);
+              setUserState(null);
+            } else if (storedUser) {
+              setUserState(JSON.parse(storedUser));
+            } else {
+              throw profileErr;
             }
           }
         }
@@ -217,6 +228,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const refreshWorkspaces = async () => {
     if (!user) return;
+    setWorkspacesLoading(true);
     try {
       const res = await getUserWorkspace(user._id);
       if (res.success) {
@@ -252,6 +264,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       } else {
         console.error("AppContext: error fetching workspaces:", err);
       }
+    } finally {
+      setWorkspacesLoading(false);
     }
   };
 
@@ -391,6 +405,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setProjects([]);
       setActiveProject(null);
       setUnreadCount(0);
+      setWorkspacesLoading(false);
     }
   }, [user, token, tokenReady]);
 
@@ -447,6 +462,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setActiveProject(null);
       setUnreadCount(0);
       setTodoTasks([]);
+      setWorkspacesLoading(false);
     }
   }
 
@@ -468,6 +484,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         unreadCount,
         setUnreadCount,
         loading,
+        workspacesLoading,
         themeColor,
         setThemeColor,
         isDarkMode,
