@@ -1,10 +1,10 @@
 {
   "expo": {
-    "name": "team",
+    "name": "SyncTask",
     "slug": "fronted",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
+    "icon": "./assets/management_q13ckg.png",
     "scheme": "fronted",
     "userInterfaceStyle": "automatic",
     "ios": {
