@@ -75,7 +75,7 @@ export default function CreateWorkspaceScreen() {
   };
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: "#0F0F12" }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: "#0D1117" }}>
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === "ios" ? "padding" : "height"}
@@ -105,7 +105,7 @@ export default function CreateWorkspaceScreen() {
             >
               <Text
                 style={{
-                  color: themeColor,
+                  color: "#6366F1",
                   fontSize: 16,
                   fontWeight: "600",
                 }}
@@ -113,16 +113,7 @@ export default function CreateWorkspaceScreen() {
                 ← Back
               </Text>
             </TouchableOpacity>
-
-            <Text
-              style={{
-                color: "#FCFCFD",
-                fontSize: 22,
-                fontWeight: "700",
-              }}
-            >
-              New Workspace
-            </Text>
+          
 
             <View style={{ width: 50 }} />
           </View>
@@ -140,7 +131,7 @@ export default function CreateWorkspaceScreen() {
             {/* Title */}
             <Text
               style={{
-                color: "#FCFCFD",
+                color: "#6366F1",
                 fontSize: 24,
                 fontWeight: "700",
                 marginBottom: 6,
@@ -151,7 +142,7 @@ export default function CreateWorkspaceScreen() {
 
             <Text
               style={{
-                color: "#8A8F98",
+                color: "white",
                 fontSize: 14,
                 lineHeight: 21,
                 marginBottom: 28,

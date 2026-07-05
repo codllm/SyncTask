@@ -260,7 +260,7 @@ const TaskCard = ({
   isBlocked?: boolean;
 }) => {
   const cfg = getPriorityConfig(C)[task.priority] ?? getPriorityConfig(C).low;
-  const subtaskDone = task.subtasks.filter((sub) => sub.isCompleted).length;
+  const subtaskDone = task.subtasks.filter((sub) => sub.completed).length;
   const subtaskTotal = task.subtasks.length;
   const progress = subtaskTotal > 0 ? subtaskDone / subtaskTotal : 0;
   const isCompleted = task.status === "completed";
@@ -1639,8 +1639,8 @@ export default function TasksScreen() {
 
     const buildFallbackSummary = (): TaskSummary => {
       const subtasks = selectedTask.subtasks || [];
-      const openSubtasks = subtasks.filter((sub) => !sub.isCompleted).map((sub) => sub.title).slice(0, 3);
-      const completedCount = subtasks.filter((sub) => sub.isCompleted).length;
+      const openSubtasks = subtasks.filter((sub) => !sub.completed).map((sub) => sub.title).slice(0, 3);
+      const completedCount = subtasks.filter((sub) => sub.completed).length;
       const progressText = subtasks.length ? ` Checklist progress is ${completedCount}/${subtasks.length}.` : "";
       const summaryText = selectedTask.description?.trim()
         ? `${selectedTask.description.trim()}${progressText}`
@@ -1810,7 +1810,7 @@ export default function TasksScreen() {
         dueDate: dueDate.trim() || undefined,
         startDate: startDate.trim() || undefined,
         assignedTo: assignedTo.length > 0 ? assignedTo : undefined,
-        subtasks: aiChecklist.map((item) => ({ title: item, isCompleted: false })),
+        subtasks: aiChecklist.map((item) => ({ title: item, completed: false })),
         labels: createLabels,
         dependencies: createDependencies.length > 0 ? createDependencies : undefined,
         recurring: createRecurringFrequency !== "none" ? { isRecurring: true, frequency: createRecurringFrequency } : undefined,
@@ -2129,7 +2129,7 @@ export default function TasksScreen() {
 
   const handleAddSubtask = async () => {
     if (!selectedTask || !newSubtaskTitle.trim()) return;
-    const updated = [...selectedTask.subtasks, { title: newSubtaskTitle.trim(), isCompleted: false } as SubTask];
+    const updated = [...selectedTask.subtasks, { title: newSubtaskTitle.trim(), completed: false } as SubTask];
     try {
       const res = await updateTask(selectedTask._id, { subtasks: updated });
       if (res.success) {
@@ -2144,7 +2144,7 @@ export default function TasksScreen() {
 
   const handleToggleSubtask = async (index: number) => {
     if (!selectedTask) return;
-    const updated = selectedTask.subtasks.map((sub, i) => (i === index ? { ...sub, isCompleted: !sub.isCompleted } : sub));
+    const updated = selectedTask.subtasks.map((sub, i) => (i === index ? { ...sub, completed: !sub.completed } : sub));
     try {
       const res = await updateTask(selectedTask._id, { subtasks: updated });
       if (res.success) {
@@ -4090,7 +4090,7 @@ export default function TasksScreen() {
                 </View>
                 {/* Checklist */}
                 <SectionLabel>
-                  {`Checklist (${selectedTask.subtasks.filter((sub) => sub.isCompleted).length}/${selectedTask.subtasks.length})`}
+                  {`Checklist (${selectedTask.subtasks.filter((sub) => sub.completed).length}/${selectedTask.subtasks.length})`}
                 </SectionLabel>
                 {selectedTask.subtasks.length > 0 && (
                   <View style={[s.membersBox, { marginBottom: 12 }]}>
@@ -4099,11 +4099,11 @@ export default function TasksScreen() {
                         <TouchableOpacity
                           disabled={isViewer}
                           onPress={() => !isViewer && handleToggleSubtask(idx)}
-                          style={[s.checkbox, sub.isCompleted && { backgroundColor: C.accent, borderColor: C.accent }]}
+                          style={[s.checkbox, sub.completed && { backgroundColor: C.accent, borderColor: C.accent }]}
                         >
-                          {sub.isCompleted && <Ionicons name="checkmark" size={12} color={C.onAccent} />}
+                          {sub.completed && <Ionicons name="checkmark" size={12} color={C.onAccent} />}
                         </TouchableOpacity>
-                        <Text style={[s.flex, s.subtaskText, sub.isCompleted && s.subtaskDone]}>{sub.title}</Text>
+                        <Text style={[s.flex, s.subtaskText, sub.completed && s.subtaskDone]}>{sub.title}</Text>
                         {!isViewer && (
                           <TouchableOpacity onPress={() => handleDeleteSubtask(idx)} style={s.subtaskDeleteHit}>
                             <Ionicons name="close" size={14} color={C.danger} />

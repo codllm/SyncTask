@@ -3,7 +3,7 @@ import api from "./user.api";
 export interface SubTask {
   _id?: string;
   title: string;
-  isCompleted: boolean;
+  completed: boolean;
 }
 
 export interface Attachment {

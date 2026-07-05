@@ -16,7 +16,7 @@ type TaskSummaryInput = {
   status?: string;
   priority?: string;
   labels?: string[];
-  subtasks?: { title: string; isCompleted?: boolean }[];
+  subtasks?: { title: string; isCompleted?: boolean; completed?: boolean }[];
   comments?: string[];
 };
 
@@ -105,32 +105,41 @@ const callNvidia = async (prompt: string, system: string, maxTokens = 700): Prom
   const apiKey = process.env.NVIDIA_API_KEY;
   if (!apiKey) return null;
 
-  const response = await fetch(`${NVIDIA_BASE_URL}/chat/completions`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model: NVIDIA_MODEL,
-      temperature: 0.35,
-      max_tokens: maxTokens,
-      messages: [
-        { role: "system", content: system },
-        { role: "user", content: prompt },
-      ],
-    }),
-  });
+  try {
+    const response = await fetch(`${NVIDIA_BASE_URL}/chat/completions`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: NVIDIA_MODEL,
+        temperature: 0.15,
+        max_tokens: maxTokens,
+        response_format: { type: "json_object" },
+        messages: [
+          { role: "system", content: system },
+          { role: "user", content: prompt },
+        ],
+      }),
+    });
 
-  if (!response.ok) return null;
+    if (!response.ok) {
+      console.error(`Nvidia API error: ${response.status} ${response.statusText}`);
+      return null;
+    }
 
-  const data = await response.json();
-  const content = data?.choices?.[0]?.message?.content;
-  return typeof content === "string" ? content : null;
+    const data = await response.json();
+    const content = data?.choices?.[0]?.message?.content;
+    return typeof content === "string" ? content : null;
+  } catch (error) {
+    console.error("Error calling Nvidia API:", error);
+    return null;
+  }
 };
 
 const fallbackSummary = (input: TaskSummaryInput): TaskSummaryResult => {
-  const completed = input.subtasks?.filter((sub) => sub.isCompleted).length || 0;
+  const completed = input.subtasks?.filter((sub) => sub.completed || sub.isCompleted).length || 0;
   const total = input.subtasks?.length || 0;
   const parts = [
     input.description?.trim() || `This task is about "${input.title.trim()}".`,
@@ -138,7 +147,7 @@ const fallbackSummary = (input: TaskSummaryInput): TaskSummaryResult => {
     total ? `Checklist progress: ${completed}/${total}.` : "",
   ].filter(Boolean);
 
-  const openSubtasks = input.subtasks?.filter((sub) => !sub.isCompleted).map((sub) => sub.title).slice(0, 3) || [];
+  const openSubtasks = input.subtasks?.filter((sub) => !sub.completed && !sub.isCompleted).map((sub) => sub.title).slice(0, 3) || [];
 
   return {
     summary: parts.join(" "),
@@ -178,20 +187,26 @@ const fallbackCommentRewrite = (input: CommentRewriteInput): CommentRewriteResul
 
 export const generateTaskDraft = async (input: TaskDraftInput): Promise<TaskDraftResult> => {
   const prompt = [
-    "Create a concise project-management task draft.",
-    "Return only valid JSON with these keys: title, description, checklist, labels, priority, estimatedHours.",
-    "priority must be one of low, medium, high. checklist should have 3-6 practical items. labels should be short.",
-    `Task title: ${input.title}`,
-    input.projectName ? `Project: ${input.projectName}` : "",
-    input.workspaceName ? `Workspace: ${input.workspaceName}` : "",
-    input.existingTasks?.length ? `Nearby tasks: ${input.existingTasks.slice(0, 8).join(", ")}` : "",
+    `Generate a precise task draft for a project management app.`,
+    `Task input title: "${input.title}"`,
+    input.projectName ? `Project context: ${input.projectName}` : "",
+    input.workspaceName ? `Workspace context: ${input.workspaceName}` : "",
+    input.existingTasks?.length ? `Nearby task titles in the same project: ${input.existingTasks.slice(0, 8).join(", ")}` : "",
+    ``,
+    `You MUST return a JSON object with exactly the following keys and types:`,
+    `{`,
+    `  "title": "A clear, action-oriented task title based on the input title",`,
+    `  "description": "A detailed description explaining what needs to be done, background, and acceptance criteria",`,
+    `  "checklist": ["3 to 6 practical step-by-step checklist items to complete the task"],`,
+    `  "labels": ["1 to 3 short relevant labels"],`,
+    `  "priority": "low" | "medium" | "high",`,
+    `  "estimatedHours": number (integer between 1 and 40)`,
+    `}`
   ].filter(Boolean).join("\n");
 
-  const content = await callNvidia(
-    prompt,
-    "You are a precise task-planning assistant for a project management app.",
-    700
-  );
+  const system = "You are a precise task-planning assistant. You MUST respond with a single valid JSON object and nothing else. No conversational text, no introductions, no markdown code block formatting, no backticks. Only the raw JSON object.";
+
+  const content = await callNvidia(prompt, system, 700);
   if (!content) {
     return fallbackDraft(input);
   }
@@ -201,25 +216,29 @@ export const generateTaskDraft = async (input: TaskDraftInput): Promise<TaskDraf
 
 export const generateTaskSummary = async (input: TaskSummaryInput): Promise<TaskSummaryResult> => {
   const prompt = [
-    "Summarize this project-management task for a teammate who needs fast context.",
-    "Return only valid JSON with keys: summary, nextSteps, blockers.",
-    "summary should be 1-2 concise sentences. nextSteps and blockers should be arrays of short practical items.",
-    `Title: ${input.title}`,
-    input.description ? `Description: ${input.description}` : "",
-    input.status ? `Status: ${input.status}` : "",
-    input.priority ? `Priority: ${input.priority}` : "",
-    input.labels?.length ? `Labels: ${input.labels.join(", ")}` : "",
+    `Summarize this project-management task for a teammate who needs fast context.`,
+    `Task Details:`,
+    `- Title: ${input.title}`,
+    input.description ? `- Description: ${input.description}` : "",
+    input.status ? `- Status: ${input.status}` : "",
+    input.priority ? `- Priority: ${input.priority}` : "",
+    input.labels?.length ? `- Labels: ${input.labels.join(", ")}` : "",
     input.subtasks?.length
-      ? `Checklist: ${input.subtasks.map((sub) => `${sub.isCompleted ? "[done]" : "[open]"} ${sub.title}`).join("; ")}`
+      ? `- Checklist items: ${input.subtasks.map((sub) => `${(sub.completed || sub.isCompleted) ? "[done]" : "[open]"} ${sub.title}`).join("; ")}`
       : "",
-    input.comments?.length ? `Recent comments: ${input.comments.slice(-5).join(" | ")}` : "",
+    input.comments?.length ? `- Recent discussion comments: ${input.comments.slice(-5).join(" | ")}` : "",
+    ``,
+    `You MUST return a JSON object with exactly the following keys and types:`,
+    `{`,
+    `  "summary": "1-2 concise sentences summarizing the task goal and current progress",`,
+    `  "nextSteps": ["2 to 4 short practical next actions to take"],`,
+    `  "blockers": ["Any blockers, issues, or risks identified, or an empty array if none"]`,
+    `}`
   ].filter(Boolean).join("\n");
 
-  const content = await callNvidia(
-    prompt,
-    "You are a concise project manager. Be practical, specific, and avoid hype.",
-    650
-  );
+  const system = "You are a precise project manager assistant. You MUST respond with a single valid JSON object and nothing else. No conversational text, no introductions, no markdown code block formatting, no backticks. Only the raw JSON object.";
+
+  const content = await callNvidia(prompt, system, 650);
   if (!content) return fallbackSummary(input);
 
   return parseSummary(content, input);
@@ -227,18 +246,19 @@ export const generateTaskSummary = async (input: TaskSummaryInput): Promise<Task
 
 export const rewriteComment = async (input: CommentRewriteInput): Promise<CommentRewriteResult> => {
   const prompt = [
-    "Rewrite this task comment to be clear, polite, and professional while keeping the same meaning.",
-    "Return only valid JSON with the key: content.",
-    "Keep it short. Do not add new facts.",
-    input.taskTitle ? `Task: ${input.taskTitle}` : "",
-    `Comment: ${input.content}`,
+    `Rewrite this task comment to be clear, polite, and professional while keeping the exact same meaning.`,
+    input.taskTitle ? `Task context: ${input.taskTitle}` : "",
+    `Original Comment: "${input.content}"`,
+    ``,
+    `You MUST return a JSON object with exactly the following key and type:`,
+    `{`,
+    `  "content": "The rewritten comment text"`,
+    `}`
   ].filter(Boolean).join("\n");
 
-  const content = await callNvidia(
-    prompt,
-    "You improve workplace comments without changing intent.",
-    350
-  );
+  const system = "You improve workplace comments for clarity and professionalism while preserving intent. You MUST respond with a single valid JSON object and nothing else. No conversational text, no introductions, no markdown code block formatting, no backticks. Only the raw JSON object.";
+
+  const content = await callNvidia(prompt, system, 350);
   if (!content) return fallbackCommentRewrite(input);
 
   const parsed = parseJsonObject(content);

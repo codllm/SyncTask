@@ -31,7 +31,7 @@ export const generateTaskSummary = async (payload: {
   status?: string;
   priority?: string;
   labels?: string[];
-  subtasks?: { title: string; isCompleted?: boolean }[];
+  subtasks?: { title: string; completed?: boolean }[];
   comments?: string[];
 }): Promise<{ success: boolean; summary: TaskSummary }> => {
   const res = await api.post("/api/ai/task-summary", payload);
