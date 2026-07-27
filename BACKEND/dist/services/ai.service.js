@@ -16,8 +16,14 @@ exports.rewriteComment = exports.generateTaskSummary = exports.generateTaskDraft
 const dotenv_1 = __importDefault(require("dotenv"));
 dotenv_1.default.config({ path: ".env.local" });
 dotenv_1.default.config();
-const NVIDIA_BASE_URL = process.env.NVIDIA_BASE_URL || "https://integrate.api.nvidia.com/v1";
-const NVIDIA_MODEL = process.env.NVIDIA_MODEL || "meta/llama-3.1-70b-instruct";
+const AI_BASE_URL = process.env.OPENROUTER_BASE_URL ||
+    process.env.AI_BASE_URL ||
+    process.env.NVIDIA_BASE_URL ||
+    "https://openrouter.ai/api/v1";
+const AI_MODEL = process.env.OPENROUTER_MODEL ||
+    process.env.AI_MODEL ||
+    process.env.NVIDIA_MODEL ||
+    "inclusionai/ling-3.0-flash:free";
 const fallbackDraft = (input) => {
     const cleanTitle = input.title.trim();
     return {
@@ -68,23 +74,73 @@ const parseJsonObject = (content) => {
         return null;
     }
 };
-const callNvidia = (prompt_1, system_1, ...args_1) => __awaiter(void 0, [prompt_1, system_1, ...args_1], void 0, function* (prompt, system, maxTokens = 700) {
+const extractAiContent = (content) => {
+    if (typeof content === "string")
+        return content;
+    if (Array.isArray(content)) {
+        const parts = content
+            .map((part) => {
+            if (typeof part === "string")
+                return part;
+            if (part && typeof part === "object") {
+                const text = part.text;
+                const nestedContent = part.content;
+                if (typeof text === "string")
+                    return text;
+                if (typeof nestedContent === "string")
+                    return nestedContent;
+            }
+            return "";
+        })
+            .filter(Boolean);
+        return parts.length ? parts.join("") : null;
+    }
+    if (content && typeof content === "object") {
+        const text = content.text;
+        const nestedContent = content.content;
+        if (typeof text === "string")
+            return text;
+        if (typeof nestedContent === "string")
+            return nestedContent;
+    }
+    return null;
+};
+const getAiApiKey = () => process.env.OPENROUTER_API_KEY || process.env.AI_API_KEY || process.env.NVIDIA_API_KEY;
+const getAiProviderName = () => {
+    if (process.env.OPENROUTER_API_KEY || AI_BASE_URL.includes("openrouter.ai"))
+        return "OpenRouter";
+    if (process.env.NVIDIA_API_KEY || AI_BASE_URL.includes("nvidia.com"))
+        return "Nvidia";
+    return "AI provider";
+};
+const buildAiHeaders = (apiKey) => {
+    const headers = {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+    };
+    if (AI_BASE_URL.includes("openrouter.ai")) {
+        const referer = process.env.OPENROUTER_HTTP_REFERER || process.env.OPENROUTER_SITE_URL;
+        const appName = process.env.OPENROUTER_APP_NAME || "Task Project Management";
+        if (referer)
+            headers["HTTP-Referer"] = referer;
+        if (appName)
+            headers["X-Title"] = appName;
+    }
+    return headers;
+};
+const callAiProvider = (prompt_1, system_1, ...args_1) => __awaiter(void 0, [prompt_1, system_1, ...args_1], void 0, function* (prompt, system, maxTokens = 700) {
     var _a, _b, _c;
-    const apiKey = process.env.NVIDIA_API_KEY;
+    const apiKey = getAiApiKey();
     if (!apiKey)
         return null;
     try {
-        const response = yield fetch(`${NVIDIA_BASE_URL}/chat/completions`, {
+        const response = yield fetch(`${AI_BASE_URL}/chat/completions`, {
             method: "POST",
-            headers: {
-                Authorization: `Bearer ${apiKey}`,
-                "Content-Type": "application/json",
-            },
+            headers: buildAiHeaders(apiKey),
             body: JSON.stringify({
-                model: NVIDIA_MODEL,
+                model: AI_MODEL,
                 temperature: 0.15,
                 max_tokens: maxTokens,
-                response_format: { type: "json_object" },
                 messages: [
                     { role: "system", content: system },
                     { role: "user", content: prompt },
@@ -92,15 +148,15 @@ const callNvidia = (prompt_1, system_1, ...args_1) => __awaiter(void 0, [prompt_
             }),
         });
         if (!response.ok) {
-            console.error(`Nvidia API error: ${response.status} ${response.statusText}`);
+            console.error(`${getAiProviderName()} API error: ${response.status} ${response.statusText}`);
             return null;
         }
         const data = yield response.json();
         const content = (_c = (_b = (_a = data === null || data === void 0 ? void 0 : data.choices) === null || _a === void 0 ? void 0 : _a[0]) === null || _b === void 0 ? void 0 : _b.message) === null || _c === void 0 ? void 0 : _c.content;
-        return typeof content === "string" ? content : null;
+        return extractAiContent(content);
     }
     catch (error) {
-        console.error("Error calling Nvidia API:", error);
+        console.error(`Error calling ${getAiProviderName()} API:`, error);
         return null;
     }
 });
@@ -138,10 +194,28 @@ const parseSummary = (content, input) => {
             : fallbackSummary(input).blockers,
     };
 };
+const composeInstructionComment = (input) => {
+    const cleaned = input.content.replace(/\s+/g, " ").trim();
+    if (!cleaned)
+        return null;
+    const lowerIntent = `${cleaned} ${input.taskTitle || ""}`.toLowerCase();
+    if (/congrat|congrats/.test(lowerIntent)) {
+        const speedPhrase = /fast|quick|early|first/.test(lowerIntent) ? " so quickly" : "";
+        return { content: `Congratulations on completing this${speedPhrase}. Great work!` };
+    }
+    return null;
+};
+const looksLikeUnconvertedInstruction = (content) => {
+    const lower = content.toLowerCase();
+    return /\b(wish|write|make|create|draft|ask|tell|reply|comment)\b/.test(lower) && /congrat|congrats/.test(lower);
+};
 const fallbackCommentRewrite = (input) => {
     const cleaned = input.content.replace(/\s+/g, " ").trim();
     if (!cleaned)
         return { content: input.content };
+    const composed = composeInstructionComment(input);
+    if (composed)
+        return composed;
     const withCapital = cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
     const content = /[.!?]$/.test(withCapital) ? withCapital : `${withCapital}.`;
     return { content };
@@ -166,7 +240,7 @@ const generateTaskDraft = (input) => __awaiter(void 0, void 0, void 0, function*
         `}`
     ].filter(Boolean).join("\n");
     const system = "You are a precise task-planning assistant. You MUST respond with a single valid JSON object and nothing else. No conversational text, no introductions, no markdown code block formatting, no backticks. Only the raw JSON object.";
-    const content = yield callNvidia(prompt, system, 700);
+    const content = yield callAiProvider(prompt, system, 700);
     if (!content) {
         return fallbackDraft(input);
     }
@@ -196,31 +270,47 @@ const generateTaskSummary = (input) => __awaiter(void 0, void 0, void 0, functio
         `}`
     ].filter(Boolean).join("\n");
     const system = "You are a precise project manager assistant. You MUST respond with a single valid JSON object and nothing else. No conversational text, no introductions, no markdown code block formatting, no backticks. Only the raw JSON object.";
-    const content = yield callNvidia(prompt, system, 650);
+    const content = yield callAiProvider(prompt, system, 650);
     if (!content)
         return fallbackSummary(input);
     return parseSummary(content, input);
 });
 exports.generateTaskSummary = generateTaskSummary;
 const rewriteComment = (input) => __awaiter(void 0, void 0, void 0, function* () {
+    const composed = composeInstructionComment(input);
+    if (composed)
+        return composed;
     const prompt = [
-        `Rewrite this task comment to be clear, polite, and professional while keeping the exact same meaning.`,
+        `Turn the user's text into a ready-to-post task comment for a project management app.`,
+        `If the user's text is already a comment, polish it for clarity, warmth, and professionalism.`,
+        `If the user's text is an instruction or request like "wish him congratulations", "ask her for an update", or "thank them for finishing fast", write the actual comment that should be posted. Do not repeat the instruction.`,
+        `Keep the comment natural, concise, and directly usable. Use second person when appropriate.`,
         input.taskTitle ? `Task context: ${input.taskTitle}` : "",
-        `Original Comment: "${input.content}"`,
+        `User text: "${input.content}"`,
+        ``,
+        `Examples:`,
+        `User text: "Wish him congratulation for completed first."`,
+        `Output content: "Congratulations on completing this so quickly. Great work!"`,
+        `User text: "ask her to share an update by today"`,
+        `Output content: "Could you please share an update by today?"`,
         ``,
         `You MUST return a JSON object with exactly the following key and type:`,
         `{`,
         `  "content": "The rewritten comment text"`,
         `}`
     ].filter(Boolean).join("\n");
-    const system = "You improve workplace comments for clarity and professionalism while preserving intent. You MUST respond with a single valid JSON object and nothing else. No conversational text, no introductions, no markdown code block formatting, no backticks. Only the raw JSON object.";
-    const content = yield callNvidia(prompt, system, 350);
+    const system = "You are a task comment drafting assistant. Convert user instructions into the actual comment text, and polish existing comments without changing their intent. You MUST respond with a single valid JSON object and nothing else. No conversational text, no introductions, no markdown code block formatting, no backticks. Only the raw JSON object.";
+    const content = yield callAiProvider(prompt, system, 350);
     if (!content)
         return fallbackCommentRewrite(input);
     const parsed = parseJsonObject(content);
     if (!parsed || typeof parsed.content !== "string" || !parsed.content.trim()) {
         return fallbackCommentRewrite(input);
     }
-    return { content: parsed.content.trim() };
+    const polishedContent = parsed.content.trim();
+    if (looksLikeUnconvertedInstruction(polishedContent)) {
+        return fallbackCommentRewrite(input);
+    }
+    return { content: polishedContent };
 });
 exports.rewriteComment = rewriteComment;

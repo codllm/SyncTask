@@ -449,21 +449,8 @@ export default function ProfileScreen() {
             activeOpacity={0.7}
           >
             <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
-              <View
-                style={{
-                  width: 34,
-                  height: 34,
-                  borderRadius: 10,
-                  backgroundColor: `${themeColor}14`,
-                  borderWidth: 0.5,
-                  borderColor: `${themeColor}26`,
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
-                <Text style={{ fontSize: 15 }}>✏️</Text>
-              </View>
-              <Text style={{ color: C.textSecondary, fontSize: 14, fontWeight: "500" }}>
+              
+              <Text style={{ color: C.textSecondary, fontSize: 16, fontWeight: "500" }}>
                 Edit profile
               </Text>
             </View>
@@ -483,21 +470,8 @@ export default function ProfileScreen() {
             activeOpacity={0.7}
           >
             <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
-              <View
-                style={{
-                  width: 34,
-                  height: 34,
-                  borderRadius: 10,
-                  backgroundColor: C.dangerBg,
-                  borderWidth: 0.5,
-                  borderColor: C.dangerBorder,
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
-                <Text style={{ fontSize: 15 }}>🚪</Text>
-              </View>
-              <Text style={{ color: C.danger, fontSize: 14, fontWeight: "500" }}>
+
+              <Text style={{ color: C.danger, fontSize: 16, fontWeight: "500" }}>
                 Sign out
               </Text>
             </View>

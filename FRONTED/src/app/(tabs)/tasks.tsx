@@ -1685,12 +1685,40 @@ export default function TasksScreen() {
   const handlePolishComment = async () => {
     if (!selectedTask || !newCommentContent.trim()) return;
 
-    const fallbackPolish = () => {
-      const cleaned = newCommentContent.replace(/\s+/g, " ").trim();
-      if (!cleaned) return;
-      const withCapital = cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
-      setNewCommentContent(/[.!?]$/.test(withCapital) ? withCapital : `${withCapital}.`);
+    const composeInstructionComment = (rawContent: string) => {
+      const cleaned = rawContent.replace(/\s+/g, " ").trim();
+      if (!cleaned) return "";
+
+      const lowerIntent = `${cleaned} ${selectedTask.title || ""}`.toLowerCase();
+      if (/congrat|congrats/.test(lowerIntent)) {
+        const speedPhrase = /fast|quick|early|first/.test(lowerIntent) ? " so quickly" : "";
+        return `Congratulations on completing this${speedPhrase}. Great work!`;
+      }
+
+      return "";
     };
+
+    const composeFallbackComment = (rawContent: string) => {
+      const cleaned = rawContent.replace(/\s+/g, " ").trim();
+      if (!cleaned) return "";
+
+      const instructionComment = composeInstructionComment(cleaned);
+      if (instructionComment) return instructionComment;
+
+      const withCapital = cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
+      return /[.!?]$/.test(withCapital) ? withCapital : `${withCapital}.`;
+    };
+
+    const fallbackPolish = () => {
+      const fallback = composeFallbackComment(newCommentContent);
+      if (fallback) setNewCommentContent(fallback);
+    };
+
+    const instructionComment = composeInstructionComment(newCommentContent);
+    if (instructionComment) {
+      setNewCommentContent(instructionComment);
+      return;
+    }
 
     setCommentPolishLoading(true);
     try {
