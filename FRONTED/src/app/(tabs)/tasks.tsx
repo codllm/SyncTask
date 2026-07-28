@@ -1693,33 +1693,36 @@ export default function TasksScreen() {
   const handlePolishComment = async () => {
     if (!selectedTask || !newCommentContent.trim()) return;
 
-    const composeFallbackComment = (rawContent: string) => {
-      const cleaned = rawContent.replace(/\s+/g, " ").trim();
-      if (!cleaned) return "";
-
-      const withCapital = cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
-      return /[.!?]$/.test(withCapital) ? withCapital : `${withCapital}.`;
-    };
-
-    const fallbackPolish = () => {
-      const fallback = composeFallbackComment(newCommentContent);
-      if (fallback) setNewCommentContent(fallback);
-    };
+    const originalContent = newCommentContent.trim();
+    const normalizeComment = (content: string) => content.replace(/\s+/g, " ").trim().toLowerCase();
 
     setCommentPolishLoading(true);
     try {
       const res = await rewriteComment({
-        content: newCommentContent,
+        content: originalContent,
         taskTitle: selectedTask.title,
       });
 
       if (res.success && res.content) {
-        setNewCommentContent(res.content);
+        const nextContent = res.content.trim();
+        if (normalizeComment(nextContent) === normalizeComment(originalContent)) {
+          Alert.alert(
+            "AI did not change this",
+            "The backend returned the same text. Make sure the app is connected to the updated backend with the OpenRouter key."
+          );
+          return;
+        }
+
+        setNewCommentContent(nextContent);
       } else {
-        fallbackPolish();
+        Alert.alert("AI unavailable", "The backend did not return a rewritten comment.");
       }
-    } catch {
-      fallbackPolish();
+    } catch (err: any) {
+      console.error("Comment AI polish failed:", err?.response?.data || err?.message || err);
+      Alert.alert(
+        "AI unavailable",
+        err?.response?.data?.message || "Could not reach the AI rewrite endpoint. Check the backend URL and restart the server."
+      );
     } finally {
       setCommentPolishLoading(false);
     }
