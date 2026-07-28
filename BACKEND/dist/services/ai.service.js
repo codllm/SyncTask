@@ -12,7 +12,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.rewriteComment = exports.generateTaskSummary = exports.generateTaskDraft = exports.composeReadyCommentFromInstruction = void 0;
+exports.prepareCommentContent = exports.rewriteComment = exports.generateTaskSummary = exports.generateTaskDraft = void 0;
 const dotenv_1 = __importDefault(require("dotenv"));
 dotenv_1.default.config({ path: ".env.local" });
 dotenv_1.default.config();
@@ -87,6 +87,11 @@ const parseJsonObject = (content) => {
         return null;
     }
 };
+const cleanAiText = (content) => {
+    const trimmed = content.trim();
+    const fenceMatch = trimmed.match(/^```(?:json|text)?\s*([\s\S]*?)\s*```$/i);
+    return (fenceMatch ? fenceMatch[1] : trimmed).trim();
+};
 const extractAiContent = (content) => {
     if (typeof content === "string")
         return content;
@@ -147,18 +152,22 @@ const callAiProvider = (prompt_1, system_1, ...args_1) => __awaiter(void 0, [pro
     if (!apiKey)
         return null;
     try {
+        const body = {
+            model: AI_MODEL,
+            temperature: 0.15,
+            max_tokens: maxTokens,
+            messages: [
+                { role: "system", content: system },
+                { role: "user", content: prompt },
+            ],
+        };
+        if (AI_BASE_URL.includes("openrouter.ai")) {
+            body.reasoning = { enabled: true };
+        }
         const response = yield fetch(`${AI_BASE_URL}/chat/completions`, {
             method: "POST",
             headers: buildAiHeaders(apiKey),
-            body: JSON.stringify({
-                model: AI_MODEL,
-                temperature: 0.15,
-                max_tokens: maxTokens,
-                messages: [
-                    { role: "system", content: system },
-                    { role: "user", content: prompt },
-                ],
-            }),
+            body: JSON.stringify(body),
         });
         if (!response.ok) {
             console.error(`${getAiProviderName()} API error: ${response.status} ${response.statusText}`);
@@ -207,63 +216,21 @@ const parseSummary = (content, input) => {
             : fallbackSummary(input).blockers,
     };
 };
-const isExistingReadyComment = (cleaned) => {
-    const lower = cleaned.toLowerCase();
-    return (/^congratulations\b/.test(lower) ||
-        /^congrats\b/.test(lower) ||
-        /^thank you\b/.test(lower) ||
-        /^thanks\b/.test(lower) ||
-        /^could you\b/.test(lower) ||
-        /^please\b/.test(lower) ||
-        /^great work\b/.test(lower));
-};
-const composeReadyCommentFromInstruction = (input) => {
-    const cleaned = input.content.replace(/\s+/g, " ").trim();
-    if (!cleaned)
-        return null;
-    if (isExistingReadyComment(cleaned))
-        return null;
-    const lowerIntent = `${cleaned} ${input.taskTitle || ""}`.toLowerCase();
-    const hasFastIntent = /fast|quick|quickly|early|first|before time|ahead/.test(lowerIntent);
-    if (/congrat|congrats/.test(lowerIntent)) {
-        const speedPhrase = hasFastIntent ? " so quickly" : "";
-        return `Congratulations on completing this${speedPhrase}. Great work!`;
-    }
-    if (/\b(thank|thanks|appreciate)\b/.test(lowerIntent)) {
-        if (/complete|finish|done|resolve|close/.test(lowerIntent)) {
-            const speedPhrase = hasFastIntent ? " so quickly" : "";
-            return `Thank you for completing this${speedPhrase}. Great work!`;
-        }
-        return "Thank you for your help with this.";
-    }
-    if (/\b(ask|tell|request|remind)\b/.test(lowerIntent) && /\b(update|status|progress)\b/.test(lowerIntent)) {
-        const timePhrase = /today/.test(lowerIntent) ? " by today" : /tomorrow/.test(lowerIntent) ? " by tomorrow" : "";
-        return `Could you please share an update on this task${timePhrase}?`;
-    }
-    if (/\b(ask|tell|request|remind)\b/.test(lowerIntent) && /\b(review|check|verify|feedback)\b/.test(lowerIntent)) {
-        return "Could you please review this and share your feedback?";
-    }
-    if (/\b(ask|tell|request|remind)\b/.test(lowerIntent) && /\b(complete|finish|done|close)\b/.test(lowerIntent)) {
-        const timePhrase = /today/.test(lowerIntent) ? " by today" : /tomorrow/.test(lowerIntent) ? " by tomorrow" : "";
-        return `Could you please complete this task${timePhrase}?`;
-    }
-    if (/\b(apologize|apologise|sorry)\b/.test(lowerIntent)) {
-        return "Sorry for the confusion. I will take care of this.";
-    }
-    return null;
-};
-exports.composeReadyCommentFromInstruction = composeReadyCommentFromInstruction;
-const looksLikeUnconvertedInstruction = (content) => {
-    const lower = content.toLowerCase();
-    return /\b(wish|write|make|create|draft|ask|tell|reply|comment|request|remind)\b/.test(lower);
+const normalizeForComparison = (content) => content.toLowerCase().replace(/[^a-z0-9]+/g, " ").replace(/\s+/g, " ").trim();
+const looksLikeUnconvertedInstruction = (content, originalContent) => {
+    const normalizedContent = normalizeForComparison(content);
+    const normalizedOriginal = normalizeForComparison(originalContent);
+    if (!normalizedContent || !normalizedOriginal)
+        return false;
+    if (normalizedContent === normalizedOriginal)
+        return true;
+    return (/^(wish|write|make|create|draft|reply|comment)\b/.test(normalizedContent) &&
+        normalizedContent.includes(normalizedOriginal.slice(0, Math.min(normalizedOriginal.length, 24))));
 };
 const fallbackCommentRewrite = (input) => {
     const cleaned = input.content.replace(/\s+/g, " ").trim();
     if (!cleaned)
         return { content: input.content };
-    const composed = (0, exports.composeReadyCommentFromInstruction)(input);
-    if (composed)
-        return { content: composed };
     const withCapital = cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
     const content = /[.!?]$/.test(withCapital) ? withCapital : `${withCapital}.`;
     return { content };
@@ -325,22 +292,17 @@ const generateTaskSummary = (input) => __awaiter(void 0, void 0, void 0, functio
 });
 exports.generateTaskSummary = generateTaskSummary;
 const rewriteComment = (input) => __awaiter(void 0, void 0, void 0, function* () {
-    const composed = (0, exports.composeReadyCommentFromInstruction)(input);
-    if (composed)
-        return { content: composed };
     const prompt = [
-        `Turn the user's text into a ready-to-post task comment for a project management app.`,
-        `If the user's text is already a comment, polish it for clarity, warmth, and professionalism.`,
-        `If the user's text is an instruction or request like "wish him congratulations", "ask her for an update", or "thank them for finishing fast", write the actual comment that should be posted. Do not repeat the instruction.`,
-        `Keep the comment natural, concise, and directly usable. Use second person when appropriate.`,
+        `Convert the user's text into the actual ready-to-post task comment they intend.`,
+        `The user may type raw notes, broken English, a direct comment, or an instruction/request such as "wish him congratulations", "ask her for an update", "tell them the bug is fixed", or any other real-world phrasing.`,
+        `Infer the intent from the text and task context, then write the comment that should be posted. Do not echo the instruction unless the instruction itself is meant to be posted.`,
+        `If the user names someone, address or mention that person naturally. If the user includes timing such as today or tomorrow, keep that timing.`,
+        `Keep the reply natural, specific to the user's request, concise, and workplace-friendly.`,
+        `Do not add emojis unless the user explicitly asks for them.`,
+        `Preserve names, @mentions, dates, deadlines, task facts, and important emotion/tone from the user's text.`,
+        `If the user's text is already a normal comment, lightly polish it instead of changing its meaning.`,
         input.taskTitle ? `Task context: ${input.taskTitle}` : "",
         `User text: "${input.content}"`,
-        ``,
-        `Examples:`,
-        `User text: "Wish him congratulation for completed first."`,
-        `Output content: "Congratulations on completing this so quickly. Great work!"`,
-        `User text: "ask her to share an update by today"`,
-        `Output content: "Could you please share an update by today?"`,
         ``,
         `You MUST return a JSON object with exactly the following key and type:`,
         `{`,
@@ -351,14 +313,23 @@ const rewriteComment = (input) => __awaiter(void 0, void 0, void 0, function* ()
     const content = yield callAiProvider(prompt, system, 350);
     if (!content)
         return fallbackCommentRewrite(input);
-    const parsed = parseJsonObject(content);
+    const cleanedContent = cleanAiText(content);
+    const parsed = parseJsonObject(cleanedContent);
     if (!parsed || typeof parsed.content !== "string" || !parsed.content.trim()) {
+        if (cleanedContent && !looksLikeUnconvertedInstruction(cleanedContent, input.content)) {
+            return { content: cleanedContent };
+        }
         return fallbackCommentRewrite(input);
     }
     const polishedContent = parsed.content.trim();
-    if (looksLikeUnconvertedInstruction(polishedContent)) {
+    if (looksLikeUnconvertedInstruction(polishedContent, input.content)) {
         return fallbackCommentRewrite(input);
     }
     return { content: polishedContent };
 });
 exports.rewriteComment = rewriteComment;
+const prepareCommentContent = (input) => __awaiter(void 0, void 0, void 0, function* () {
+    const rewritten = yield (0, exports.rewriteComment)(input);
+    return rewritten.content.trim() || input.content.trim();
+});
+exports.prepareCommentContent = prepareCommentContent;

@@ -24,8 +24,7 @@ const mention_service_1 = require("./mention.service");
 const ai_service_1 = require("./ai.service");
 const createCommentService = (content, taskId, userId) => __awaiter(void 0, void 0, void 0, function* () {
     const task = yield task_model_1.default.findById(taskId);
-    const finalContent = (0, ai_service_1.composeReadyCommentFromInstruction)({ content, taskTitle: task === null || task === void 0 ? void 0 : task.title }) ||
-        content;
+    const finalContent = yield (0, ai_service_1.prepareCommentContent)({ content, taskTitle: task === null || task === void 0 ? void 0 : task.title });
     const comment = yield comment_model_1.default.create({
         content: finalContent,
         task: taskId,
@@ -105,9 +104,7 @@ const updateCommentService = (commentId, content, userId) => __awaiter(void 0, v
     const taskTitle = comment.task && typeof comment.task === "object" && "title" in comment.task
         ? String(comment.task.title || "")
         : "";
-    comment.content =
-        (0, ai_service_1.composeReadyCommentFromInstruction)({ content, taskTitle }) ||
-            content;
+    comment.content = yield (0, ai_service_1.prepareCommentContent)({ content, taskTitle });
     yield comment.save();
     const populatedComment = yield comment_model_1.default.findById(commentId)
         .populate("user", "username email")

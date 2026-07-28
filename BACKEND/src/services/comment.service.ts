@@ -6,7 +6,7 @@ import { createNotification } from "./notification.service";
 import { emitToProject } from "./socket";
 import { createActivityLog } from "./activity.service";
 import { parseAndNotifyMentions } from "./mention.service";
-import { composeReadyCommentFromInstruction } from "./ai.service";
+import { prepareCommentContent } from "./ai.service";
 
 export const createCommentService = async (
   content: string,
@@ -14,9 +14,7 @@ export const createCommentService = async (
   userId: string
 ) => {
   const task = await TaskModel.findById(taskId);
-  const finalContent =
-    composeReadyCommentFromInstruction({ content, taskTitle: task?.title }) ||
-    content;
+  const finalContent = await prepareCommentContent({ content, taskTitle: task?.title });
 
   const comment = await CommentModel.create({
     content: finalContent,
@@ -119,9 +117,7 @@ export const updateCommentService = async (
     comment.task && typeof comment.task === "object" && "title" in comment.task
       ? String((comment.task as any).title || "")
       : "";
-  comment.content =
-    composeReadyCommentFromInstruction({ content, taskTitle }) ||
-    content;
+  comment.content = await prepareCommentContent({ content, taskTitle });
   await comment.save();
 
   const populatedComment = await CommentModel.findById(commentId)

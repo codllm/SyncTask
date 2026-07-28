@@ -1690,57 +1690,12 @@ export default function TasksScreen() {
     }
   };
 
-  const composeReadyCommentFromInstruction = (rawContent: string) => {
-    const cleaned = rawContent.replace(/\s+/g, " ").trim();
-    if (!cleaned || !selectedTask) return "";
-    if (/^(congratulations|congrats|thank you|thanks|could you|please|great work)\b/i.test(cleaned)) return "";
-
-    const lowerIntent = `${cleaned} ${selectedTask.title || ""}`.toLowerCase();
-    const hasFastIntent = /fast|quick|quickly|early|first|before time|ahead/.test(lowerIntent);
-
-    if (/congrat|congrats/.test(lowerIntent)) {
-      const speedPhrase = hasFastIntent ? " so quickly" : "";
-      return `Congratulations on completing this${speedPhrase}. Great work!`;
-    }
-
-    if (/\b(thank|thanks|appreciate)\b/.test(lowerIntent)) {
-      if (/complete|finish|done|resolve|close/.test(lowerIntent)) {
-        const speedPhrase = hasFastIntent ? " so quickly" : "";
-        return `Thank you for completing this${speedPhrase}. Great work!`;
-      }
-      return "Thank you for your help with this.";
-    }
-
-    if (/\b(ask|tell|request|remind)\b/.test(lowerIntent) && /\b(update|status|progress)\b/.test(lowerIntent)) {
-      const timePhrase = /today/.test(lowerIntent) ? " by today" : /tomorrow/.test(lowerIntent) ? " by tomorrow" : "";
-      return `Could you please share an update on this task${timePhrase}?`;
-    }
-
-    if (/\b(ask|tell|request|remind)\b/.test(lowerIntent) && /\b(review|check|verify|feedback)\b/.test(lowerIntent)) {
-      return "Could you please review this and share your feedback?";
-    }
-
-    if (/\b(ask|tell|request|remind)\b/.test(lowerIntent) && /\b(complete|finish|done|close)\b/.test(lowerIntent)) {
-      const timePhrase = /today/.test(lowerIntent) ? " by today" : /tomorrow/.test(lowerIntent) ? " by tomorrow" : "";
-      return `Could you please complete this task${timePhrase}?`;
-    }
-
-    if (/\b(apologize|apologise|sorry)\b/.test(lowerIntent)) {
-      return "Sorry for the confusion. I will take care of this.";
-    }
-
-    return "";
-  };
-
   const handlePolishComment = async () => {
     if (!selectedTask || !newCommentContent.trim()) return;
 
     const composeFallbackComment = (rawContent: string) => {
       const cleaned = rawContent.replace(/\s+/g, " ").trim();
       if (!cleaned) return "";
-
-      const instructionComment = composeReadyCommentFromInstruction(cleaned);
-      if (instructionComment) return instructionComment;
 
       const withCapital = cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
       return /[.!?]$/.test(withCapital) ? withCapital : `${withCapital}.`;
@@ -1750,12 +1705,6 @@ export default function TasksScreen() {
       const fallback = composeFallbackComment(newCommentContent);
       if (fallback) setNewCommentContent(fallback);
     };
-
-    const instructionComment = composeReadyCommentFromInstruction(newCommentContent);
-    if (instructionComment) {
-      setNewCommentContent(instructionComment);
-      return;
-    }
 
     setCommentPolishLoading(true);
     try {
@@ -2347,8 +2296,7 @@ export default function TasksScreen() {
     if (isViewer) return;
     if (!selectedTask || !newCommentContent.trim()) return;
     try {
-      const contentToPost = composeReadyCommentFromInstruction(newCommentContent) || newCommentContent.trim();
-      const res = await createComment(selectedTask._id, contentToPost);
+      const res = await createComment(selectedTask._id, newCommentContent.trim());
       if (res.success) {
         setNewCommentContent("");
         await loadComments(selectedTask._id);
