@@ -1594,10 +1594,18 @@ export default function TasksScreen() {
     };
 
     const fallbackDraft = () => {
-      const cleanTitle = title.trim();
+      const rawTitle = title.replace(/\s+/g, " ").trim();
+      const isGenericTaskRequest =
+        /\b(give|suggest|create|make|write|draft)\b.*\b(task|todo|work|item)\b/i.test(rawTitle) ||
+        /\bnew task\b/i.test(rawTitle);
+      const cleanTitle = isGenericTaskRequest
+        ? activeProject?.name
+          ? `Plan next steps for ${activeProject.name}`
+          : "Plan the next actionable project task"
+        : rawTitle;
       applyDraft({
         title: cleanTitle,
-        description: `Plan and complete "${cleanTitle}". Confirm the expected behavior, design the approach, implement the main flow, test important cases, and note any follow-up work.`,
+        description: `Define the expected outcome for ${cleanTitle.toLowerCase()}, break it into clear steps, complete the core work, verify the result, and capture any follow-up decisions.`,
         priority: "medium",
         estimatedHours: 3,
         labels: ["Planning"],
@@ -1609,7 +1617,7 @@ export default function TasksScreen() {
           "Document follow-up items",
         ],
       });
-      setAiDraftError("Using quick draft. Deploy backend AI route for NVIDIA output.");
+      setAiDraftError("Using quick draft. Connect backend AI for model output.");
     };
 
     setAiDraftLoading(true);
@@ -1672,37 +1680,66 @@ export default function TasksScreen() {
         setAiTaskSummary(res.summary);
       } else {
         setAiTaskSummary(buildFallbackSummary());
-        setAiSummaryError("Using quick summary. Deploy backend AI route for NVIDIA output.");
+        setAiSummaryError("Using quick summary. Connect backend AI for model output.");
       }
     } catch {
       setAiTaskSummary(buildFallbackSummary());
-      setAiSummaryError("Using quick summary. Deploy backend AI route for NVIDIA output.");
+      setAiSummaryError("Using quick summary. Connect backend AI for model output.");
     } finally {
       setAiSummaryLoading(false);
     }
   };
 
+  const composeReadyCommentFromInstruction = (rawContent: string) => {
+    const cleaned = rawContent.replace(/\s+/g, " ").trim();
+    if (!cleaned || !selectedTask) return "";
+    if (/^(congratulations|congrats|thank you|thanks|could you|please|great work)\b/i.test(cleaned)) return "";
+
+    const lowerIntent = `${cleaned} ${selectedTask.title || ""}`.toLowerCase();
+    const hasFastIntent = /fast|quick|quickly|early|first|before time|ahead/.test(lowerIntent);
+
+    if (/congrat|congrats/.test(lowerIntent)) {
+      const speedPhrase = hasFastIntent ? " so quickly" : "";
+      return `Congratulations on completing this${speedPhrase}. Great work!`;
+    }
+
+    if (/\b(thank|thanks|appreciate)\b/.test(lowerIntent)) {
+      if (/complete|finish|done|resolve|close/.test(lowerIntent)) {
+        const speedPhrase = hasFastIntent ? " so quickly" : "";
+        return `Thank you for completing this${speedPhrase}. Great work!`;
+      }
+      return "Thank you for your help with this.";
+    }
+
+    if (/\b(ask|tell|request|remind)\b/.test(lowerIntent) && /\b(update|status|progress)\b/.test(lowerIntent)) {
+      const timePhrase = /today/.test(lowerIntent) ? " by today" : /tomorrow/.test(lowerIntent) ? " by tomorrow" : "";
+      return `Could you please share an update on this task${timePhrase}?`;
+    }
+
+    if (/\b(ask|tell|request|remind)\b/.test(lowerIntent) && /\b(review|check|verify|feedback)\b/.test(lowerIntent)) {
+      return "Could you please review this and share your feedback?";
+    }
+
+    if (/\b(ask|tell|request|remind)\b/.test(lowerIntent) && /\b(complete|finish|done|close)\b/.test(lowerIntent)) {
+      const timePhrase = /today/.test(lowerIntent) ? " by today" : /tomorrow/.test(lowerIntent) ? " by tomorrow" : "";
+      return `Could you please complete this task${timePhrase}?`;
+    }
+
+    if (/\b(apologize|apologise|sorry)\b/.test(lowerIntent)) {
+      return "Sorry for the confusion. I will take care of this.";
+    }
+
+    return "";
+  };
+
   const handlePolishComment = async () => {
     if (!selectedTask || !newCommentContent.trim()) return;
-
-    const composeInstructionComment = (rawContent: string) => {
-      const cleaned = rawContent.replace(/\s+/g, " ").trim();
-      if (!cleaned) return "";
-
-      const lowerIntent = `${cleaned} ${selectedTask.title || ""}`.toLowerCase();
-      if (/congrat|congrats/.test(lowerIntent)) {
-        const speedPhrase = /fast|quick|early|first/.test(lowerIntent) ? " so quickly" : "";
-        return `Congratulations on completing this${speedPhrase}. Great work!`;
-      }
-
-      return "";
-    };
 
     const composeFallbackComment = (rawContent: string) => {
       const cleaned = rawContent.replace(/\s+/g, " ").trim();
       if (!cleaned) return "";
 
-      const instructionComment = composeInstructionComment(cleaned);
+      const instructionComment = composeReadyCommentFromInstruction(cleaned);
       if (instructionComment) return instructionComment;
 
       const withCapital = cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
@@ -1714,7 +1751,7 @@ export default function TasksScreen() {
       if (fallback) setNewCommentContent(fallback);
     };
 
-    const instructionComment = composeInstructionComment(newCommentContent);
+    const instructionComment = composeReadyCommentFromInstruction(newCommentContent);
     if (instructionComment) {
       setNewCommentContent(instructionComment);
       return;
@@ -2310,7 +2347,8 @@ export default function TasksScreen() {
     if (isViewer) return;
     if (!selectedTask || !newCommentContent.trim()) return;
     try {
-      const res = await createComment(selectedTask._id, newCommentContent.trim());
+      const contentToPost = composeReadyCommentFromInstruction(newCommentContent) || newCommentContent.trim();
+      const res = await createComment(selectedTask._id, contentToPost);
       if (res.success) {
         setNewCommentContent("");
         await loadComments(selectedTask._id);

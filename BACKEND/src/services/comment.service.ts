@@ -6,15 +6,20 @@ import { createNotification } from "./notification.service";
 import { emitToProject } from "./socket";
 import { createActivityLog } from "./activity.service";
 import { parseAndNotifyMentions } from "./mention.service";
+import { composeReadyCommentFromInstruction } from "./ai.service";
 
 export const createCommentService = async (
   content: string,
   taskId: string,
   userId: string
 ) => {
+  const task = await TaskModel.findById(taskId);
+  const finalContent =
+    composeReadyCommentFromInstruction({ content, taskTitle: task?.title }) ||
+    content;
 
   const comment = await CommentModel.create({
-    content,
+    content: finalContent,
     task: taskId,
     user: userId,
   });
@@ -27,7 +32,6 @@ export const createCommentService = async (
     throw new Error("Failed to populate created comment");
   }
 
-  const task = await TaskModel.findById(taskId);
   if (task) {
     const title = "New Comment on Task";
     const message = `A comment was added to task "${task.title}"`;
@@ -43,12 +47,12 @@ export const createCommentService = async (
         task: task._id.toString(),
         user: userId,
         action: "comment_added",
-        details: `commented on task "${task.title}": "${content.substring(0, 30)}${content.length > 30 ? "..." : ""}"`,
+        details: `commented on task "${task.title}": "${finalContent.substring(0, 30)}${finalContent.length > 30 ? "..." : ""}"`,
       });
     }
 
     // Call mentions service
-    await parseAndNotifyMentions(content, userId, task, true);
+    await parseAndNotifyMentions(finalContent, userId, task, true);
 
     const assigneesList = task.assignedTo ? (task.assignedTo as any[]).map(a => a.toString()) : [];
     for (const assigneeId of assigneesList) {
@@ -111,7 +115,13 @@ export const updateCommentService = async (
     throw new Error("Unauthorized: Only the author can edit this comment");
   }
 
-  comment.content = content;
+  const taskTitle =
+    comment.task && typeof comment.task === "object" && "title" in comment.task
+      ? String((comment.task as any).title || "")
+      : "";
+  comment.content =
+    composeReadyCommentFromInstruction({ content, taskTitle }) ||
+    content;
   await comment.save();
 
   const populatedComment = await CommentModel.findById(commentId)

@@ -21,9 +21,13 @@ const notification_service_1 = require("./notification.service");
 const socket_1 = require("./socket");
 const activity_service_1 = require("./activity.service");
 const mention_service_1 = require("./mention.service");
+const ai_service_1 = require("./ai.service");
 const createCommentService = (content, taskId, userId) => __awaiter(void 0, void 0, void 0, function* () {
+    const task = yield task_model_1.default.findById(taskId);
+    const finalContent = (0, ai_service_1.composeReadyCommentFromInstruction)({ content, taskTitle: task === null || task === void 0 ? void 0 : task.title }) ||
+        content;
     const comment = yield comment_model_1.default.create({
-        content,
+        content: finalContent,
         task: taskId,
         user: userId,
     });
@@ -33,7 +37,6 @@ const createCommentService = (content, taskId, userId) => __awaiter(void 0, void
     if (!populatedComment) {
         throw new Error("Failed to populate created comment");
     }
-    const task = yield task_model_1.default.findById(taskId);
     if (task) {
         const title = "New Comment on Task";
         const message = `A comment was added to task "${task.title}"`;
@@ -47,11 +50,11 @@ const createCommentService = (content, taskId, userId) => __awaiter(void 0, void
                 task: task._id.toString(),
                 user: userId,
                 action: "comment_added",
-                details: `commented on task "${task.title}": "${content.substring(0, 30)}${content.length > 30 ? "..." : ""}"`,
+                details: `commented on task "${task.title}": "${finalContent.substring(0, 30)}${finalContent.length > 30 ? "..." : ""}"`,
             });
         }
         // Call mentions service
-        yield (0, mention_service_1.parseAndNotifyMentions)(content, userId, task, true);
+        yield (0, mention_service_1.parseAndNotifyMentions)(finalContent, userId, task, true);
         const assigneesList = task.assignedTo ? task.assignedTo.map(a => a.toString()) : [];
         for (const assigneeId of assigneesList) {
             if (assigneeId !== userId.toString()) {
@@ -99,7 +102,12 @@ const updateCommentService = (commentId, content, userId) => __awaiter(void 0, v
     if (comment.user.toString() !== userId.toString()) {
         throw new Error("Unauthorized: Only the author can edit this comment");
     }
-    comment.content = content;
+    const taskTitle = comment.task && typeof comment.task === "object" && "title" in comment.task
+        ? String(comment.task.title || "")
+        : "";
+    comment.content =
+        (0, ai_service_1.composeReadyCommentFromInstruction)({ content, taskTitle }) ||
+            content;
     yield comment.save();
     const populatedComment = yield comment_model_1.default.findById(commentId)
         .populate("user", "username email")

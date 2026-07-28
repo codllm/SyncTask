@@ -12,7 +12,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.rewriteComment = exports.generateTaskSummary = exports.generateTaskDraft = void 0;
+exports.rewriteComment = exports.generateTaskSummary = exports.generateTaskDraft = exports.composeReadyCommentFromInstruction = void 0;
 const dotenv_1 = __importDefault(require("dotenv"));
 dotenv_1.default.config({ path: ".env.local" });
 dotenv_1.default.config();
@@ -24,11 +24,23 @@ const AI_MODEL = process.env.OPENROUTER_MODEL ||
     process.env.AI_MODEL ||
     process.env.NVIDIA_MODEL ||
     "inclusionai/ling-3.0-flash:free";
+const isGenericTaskRequest = (title) => /\b(give|suggest|create|make|write|draft)\b.*\b(task|todo|work|item)\b/i.test(title) ||
+    /\bnew task\b/i.test(title);
+const normalizeTaskTitle = (input) => {
+    const cleanTitle = input.title.replace(/\s+/g, " ").trim();
+    if (!isGenericTaskRequest(cleanTitle))
+        return cleanTitle;
+    if (input.projectName)
+        return `Plan next steps for ${input.projectName}`;
+    if (input.workspaceName)
+        return `Plan next workspace task`;
+    return "Plan the next actionable project task";
+};
 const fallbackDraft = (input) => {
-    const cleanTitle = input.title.trim();
+    const cleanTitle = normalizeTaskTitle(input);
     return {
         title: cleanTitle,
-        description: `Plan and complete "${cleanTitle}". Define scope, confirm requirements, implement the work, test the result, and document any follow-up decisions.`,
+        description: `Define the expected outcome for ${cleanTitle.toLowerCase()}, break it into clear steps, complete the core work, verify the result, and capture any follow-up decisions.`,
         checklist: [
             "Clarify expected outcome",
             "Break work into implementation steps",
@@ -44,8 +56,9 @@ const parseDraft = (content, input) => {
     try {
         const jsonMatch = content.match(/\{[\s\S]*\}/);
         const parsed = JSON.parse(jsonMatch ? jsonMatch[0] : content);
+        const parsedTitle = typeof parsed.title === "string" && parsed.title.trim() ? parsed.title.trim() : "";
         return {
-            title: typeof parsed.title === "string" && parsed.title.trim() ? parsed.title.trim() : input.title.trim(),
+            title: parsedTitle && !isGenericTaskRequest(parsedTitle) ? parsedTitle : normalizeTaskTitle(input),
             description: typeof parsed.description === "string" && parsed.description.trim()
                 ? parsed.description.trim()
                 : fallbackDraft(input).description,
@@ -194,28 +207,63 @@ const parseSummary = (content, input) => {
             : fallbackSummary(input).blockers,
     };
 };
-const composeInstructionComment = (input) => {
+const isExistingReadyComment = (cleaned) => {
+    const lower = cleaned.toLowerCase();
+    return (/^congratulations\b/.test(lower) ||
+        /^congrats\b/.test(lower) ||
+        /^thank you\b/.test(lower) ||
+        /^thanks\b/.test(lower) ||
+        /^could you\b/.test(lower) ||
+        /^please\b/.test(lower) ||
+        /^great work\b/.test(lower));
+};
+const composeReadyCommentFromInstruction = (input) => {
     const cleaned = input.content.replace(/\s+/g, " ").trim();
     if (!cleaned)
         return null;
+    if (isExistingReadyComment(cleaned))
+        return null;
     const lowerIntent = `${cleaned} ${input.taskTitle || ""}`.toLowerCase();
+    const hasFastIntent = /fast|quick|quickly|early|first|before time|ahead/.test(lowerIntent);
     if (/congrat|congrats/.test(lowerIntent)) {
-        const speedPhrase = /fast|quick|early|first/.test(lowerIntent) ? " so quickly" : "";
-        return { content: `Congratulations on completing this${speedPhrase}. Great work!` };
+        const speedPhrase = hasFastIntent ? " so quickly" : "";
+        return `Congratulations on completing this${speedPhrase}. Great work!`;
+    }
+    if (/\b(thank|thanks|appreciate)\b/.test(lowerIntent)) {
+        if (/complete|finish|done|resolve|close/.test(lowerIntent)) {
+            const speedPhrase = hasFastIntent ? " so quickly" : "";
+            return `Thank you for completing this${speedPhrase}. Great work!`;
+        }
+        return "Thank you for your help with this.";
+    }
+    if (/\b(ask|tell|request|remind)\b/.test(lowerIntent) && /\b(update|status|progress)\b/.test(lowerIntent)) {
+        const timePhrase = /today/.test(lowerIntent) ? " by today" : /tomorrow/.test(lowerIntent) ? " by tomorrow" : "";
+        return `Could you please share an update on this task${timePhrase}?`;
+    }
+    if (/\b(ask|tell|request|remind)\b/.test(lowerIntent) && /\b(review|check|verify|feedback)\b/.test(lowerIntent)) {
+        return "Could you please review this and share your feedback?";
+    }
+    if (/\b(ask|tell|request|remind)\b/.test(lowerIntent) && /\b(complete|finish|done|close)\b/.test(lowerIntent)) {
+        const timePhrase = /today/.test(lowerIntent) ? " by today" : /tomorrow/.test(lowerIntent) ? " by tomorrow" : "";
+        return `Could you please complete this task${timePhrase}?`;
+    }
+    if (/\b(apologize|apologise|sorry)\b/.test(lowerIntent)) {
+        return "Sorry for the confusion. I will take care of this.";
     }
     return null;
 };
+exports.composeReadyCommentFromInstruction = composeReadyCommentFromInstruction;
 const looksLikeUnconvertedInstruction = (content) => {
     const lower = content.toLowerCase();
-    return /\b(wish|write|make|create|draft|ask|tell|reply|comment)\b/.test(lower) && /congrat|congrats/.test(lower);
+    return /\b(wish|write|make|create|draft|ask|tell|reply|comment|request|remind)\b/.test(lower);
 };
 const fallbackCommentRewrite = (input) => {
     const cleaned = input.content.replace(/\s+/g, " ").trim();
     if (!cleaned)
         return { content: input.content };
-    const composed = composeInstructionComment(input);
+    const composed = (0, exports.composeReadyCommentFromInstruction)(input);
     if (composed)
-        return composed;
+        return { content: composed };
     const withCapital = cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
     const content = /[.!?]$/.test(withCapital) ? withCapital : `${withCapital}.`;
     return { content };
@@ -277,9 +325,9 @@ const generateTaskSummary = (input) => __awaiter(void 0, void 0, void 0, functio
 });
 exports.generateTaskSummary = generateTaskSummary;
 const rewriteComment = (input) => __awaiter(void 0, void 0, void 0, function* () {
-    const composed = composeInstructionComment(input);
+    const composed = (0, exports.composeReadyCommentFromInstruction)(input);
     if (composed)
-        return composed;
+        return { content: composed };
     const prompt = [
         `Turn the user's text into a ready-to-post task comment for a project management app.`,
         `If the user's text is already a comment, polish it for clarity, warmth, and professionalism.`,
