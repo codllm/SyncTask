@@ -33,7 +33,33 @@ const socket_1 = require("./socket");
 const activity_service_1 = require("./activity.service");
 const scheduler_1 = require("./scheduler");
 const mention_service_1 = require("./mention.service");
+const normalizeIdArray = (value) => {
+    if (!value)
+        return [];
+    return (Array.isArray(value) ? value : [value])
+        .map((id) => id === null || id === void 0 ? void 0 : id.toString())
+        .filter(Boolean);
+};
+const assertProjectTaskAccess = (projectId_1, actorId_1, ...args_1) => __awaiter(void 0, [projectId_1, actorId_1, ...args_1], void 0, function* (projectId, actorId, assigneeIds = []) {
+    const project = yield project_model_1.default.findById(projectId);
+    if (!project) {
+        throw new Error("Project not found");
+    }
+    const projectMemberIds = new Set(project.members.map((member) => member.user.toString()));
+    if (actorId && !projectMemberIds.has(actorId.toString()) && project.createdBy.toString() !== actorId.toString()) {
+        throw new Error("User must be a project member before creating or updating tasks");
+    }
+    const invalidAssignees = assigneeIds.filter((id) => !projectMemberIds.has(id));
+    if (invalidAssignees.length > 0) {
+        throw new Error("Task assignees must be members of this project");
+    }
+    return project;
+});
 const createTaskService = (data) => __awaiter(void 0, void 0, void 0, function* () {
+    var _a;
+    const assignedIds = normalizeIdArray(data.assignedTo);
+    yield assertProjectTaskAccess(data.project, (_a = data.createdBy) === null || _a === void 0 ? void 0 : _a.toString(), assignedIds);
+    data.assignedTo = assignedIds;
     const status = data.status || "todo";
     const count = yield task_model_1.default.countDocuments({ project: data.project, status });
     if (data.recurring && data.recurring.isRecurring && !data.recurring.nextRun) {
@@ -129,6 +155,14 @@ const updateTaskService = (taskId, data, updaterId) => __awaiter(void 0, void 0,
     const originalTask = yield task_model_1.default.findById(taskId);
     if (!originalTask) {
         throw new Error("Task not found");
+    }
+    if (data.assignedTo !== undefined) {
+        const assignedIds = normalizeIdArray(data.assignedTo);
+        yield assertProjectTaskAccess(originalTask.project.toString(), updaterId === null || updaterId === void 0 ? void 0 : updaterId.toString(), assignedIds);
+        data.assignedTo = assignedIds;
+    }
+    else if (updaterId) {
+        yield assertProjectTaskAccess(originalTask.project.toString(), updaterId.toString());
     }
     const { newAttachments } = data, updateData = __rest(data, ["newAttachments"]);
     const attachmentsToAdd = Array.isArray(newAttachments) && newAttachments.length > 0
@@ -385,6 +419,14 @@ const deleteTimeLogService = (taskId, logId) => __awaiter(void 0, void 0, void 0
 });
 exports.deleteTimeLogService = deleteTimeLogService;
 const bulkUpdateTasksService = (taskIds, updateData, updaterId) => __awaiter(void 0, void 0, void 0, function* () {
+    const assignedIds = updateData.assignedTo !== undefined ? normalizeIdArray(updateData.assignedTo) : undefined;
+    if (assignedIds !== undefined) {
+        const targetTasks = yield task_model_1.default.find({ _id: { $in: taskIds } }).select("project");
+        const projectIds = Array.from(new Set(targetTasks.map((task) => task.project.toString())));
+        for (const projectId of projectIds) {
+            yield assertProjectTaskAccess(projectId, updaterId === null || updaterId === void 0 ? void 0 : updaterId.toString(), assignedIds);
+        }
+    }
     const updates = {};
     if (updateData.status !== undefined)
         updates.status = updateData.status;
@@ -398,9 +440,7 @@ const bulkUpdateTasksService = (taskIds, updateData, updaterId) => __awaiter(voi
             updates.deletedAt = new Date();
     }
     if (updateData.assignedTo !== undefined) {
-        updates.assignedTo = Array.isArray(updateData.assignedTo)
-            ? updateData.assignedTo.map((id) => new mongoose_1.default.Types.ObjectId(id))
-            : [];
+        updates.assignedTo = (assignedIds === null || assignedIds === void 0 ? void 0 : assignedIds.map((id) => new mongoose_1.default.Types.ObjectId(id))) || [];
     }
     const results = yield task_model_1.default.updateMany({ _id: { $in: taskIds } }, { $set: updates });
     const tasks = yield task_model_1.default.find({ _id: { $in: taskIds } })

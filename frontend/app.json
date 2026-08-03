@@ -1,18 +1,18 @@
 {
   "expo": {
     "name": "SyncTask",
-    "slug": "fronted",
+    "slug": "frontend",
     "version": "1.0.0",
     "orientation": "portrait",
 
     "icon": "./assets/management_q13ckg.png",
 
-    "scheme": "fronted",
+    "scheme": "frontend",
     "userInterfaceStyle": "automatic",
 
     "ios": {
       "icon": "./assets/management_q13ckg.png",
-      "bundleIdentifier": "com.anonymous.fronted"
+      "bundleIdentifier": "com.anonymous.frontend"
     },
 
     "android": {
@@ -21,7 +21,7 @@
         "backgroundColor": "#ffffff"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.anonymous.fronted"
+      "package": "com.anonymous.frontend"
     },
 
     "web": {
@@ -36,7 +36,7 @@
         {
           "image": "./assets/management_q13ckg.png",
           "imageWidth": 150,
-          "backgroundColor": "#0B0F19",
+          "backgroundColor": "#15171C",
 
           "android": {
             "image": "./assets/management_q13ckg.png",

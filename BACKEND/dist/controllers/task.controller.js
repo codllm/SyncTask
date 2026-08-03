@@ -23,7 +23,7 @@ const createTaskController = (req, res) => __awaiter(void 0, void 0, void 0, fun
     catch (error) {
         return res.status(500).json({
             success: false,
-            message: "Failed to create task",
+            message: error instanceof Error ? error.message : "Failed to create task",
         });
     }
 });

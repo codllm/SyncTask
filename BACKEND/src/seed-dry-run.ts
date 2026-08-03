@@ -160,13 +160,12 @@ async function runSeederAndRun() {
     // Test 2: Logo Customization Check
     logTest("Workspace Logo Link", !!workspace.logoUrl, `Logo URL saved successfully: ${workspace.logoUrl}`);
 
-    // 5. Create Project (Project Cover Image Customization)
+    // 5. Create Project
     console.log("\n📁 Creating test project...");
     const project = new Project({
       name: "Run Project",
       description: "Custom project for system  run validations",
       color: "#C2F193",
-      coverImageUrl: "https://res.cloudinary.com/dsxhyk1qu/image/upload/v1700000000/mock_cover.png",
       workspace: workspace._id,
       createdBy: owner._id,
       status: "ACTIVE",
@@ -180,10 +179,7 @@ async function runSeederAndRun() {
       ],
     });
     await project.save();
-    console.log(`✅ Created Project: "${project.name}" with cover banner.`);
-
-    // Test 3: Project Cover Image Check
-    logTest("Project Cover Image Link", project.coverImageUrl === "https://res.cloudinary.com/dsxhyk1qu/image/upload/v1700000000/mock_cover.png", `Cover image URL saved successfully: ${project.coverImageUrl}`);
+    console.log(`✅ Created Project: "${project.name}".`);
 
     // 6. Create Milestones
     console.log("\n🏁 Creating project milestones...");

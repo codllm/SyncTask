@@ -189,33 +189,7 @@ export default function HomeScreen() {
     })
   );
 
-  useEffect(() => {
-    if (activeWorkspace) {
-      loadWorkspaceAnalytics();
-    } else {
-      setAnalytics(null);
-      setStats({ total: 0, completed: 0, inProgress: 0 });
-    }
-  }, [activeWorkspace, projects]);
-
-  useEffect(() => {
-    if (activeWorkspace) loadActivities();
-    else setActivities([]);
-  }, [activeWorkspace]);
-
-  useEffect(() => {
-    if (user) loadPinnedItems();
-  }, [activeWorkspace, projects, user]);
-
-  useEffect(() => {
-    const d = setTimeout(() => {
-      if (globalQuery.trim().length >= 2) performGlobalSearch();
-      else setGlobalResults(null);
-    }, 400);
-    return () => clearTimeout(d);
-  }, [globalQuery]);
-
-  const performGlobalSearch = async () => {
+  async function performGlobalSearch() {
     setSearchingGlobal(true);
     try {
       const res = await globalSearch(globalQuery);
@@ -225,7 +199,122 @@ export default function HomeScreen() {
     } finally {
       setSearchingGlobal(false);
     }
-  };
+  }
+
+  async function loadActivities() {
+    if (!activeWorkspace) return;
+    setLoadingActivities(true);
+    try {
+      const res = await getWorkspaceActivities(activeWorkspace._id);
+      if (res.success) setActivities(res.activities);
+    } catch (err) {
+      console.error("Error loading activities:", err);
+    } finally {
+      setLoadingActivities(false);
+    }
+  }
+
+  async function loadWorkspaceAnalytics() {
+    if (!activeWorkspace) return;
+    setLoadingStats(true);
+    try {
+      const res = await getWorkspaceAnalytics(activeWorkspace._id);
+      if (res.success) {
+        setAnalytics(res.analytics);
+        setStats({
+          total:      res.analytics.summary.total,
+          completed:  res.analytics.summary.completed,
+          inProgress: res.analytics.summary.inProgress,
+        });
+      }
+    } catch (err) {
+      console.error("Error loading workspace analytics:", err);
+    } finally {
+      setLoadingStats(false);
+    }
+  }
+
+  async function loadPinnedItems() {
+    setLoadingPinned(true);
+    try {
+      const res = await getPinnedItemsApi();
+      if (res.success) {
+        setPinnedProjects(res.pinnedProjects || []);
+        setPinnedTasks(res.pinnedTasks || []);
+      }
+    } catch (err: any) {
+      if (err?.response?.status === 401) {
+        console.warn("Session expired loading pinned items (401)");
+      } else {
+        console.error("Error loading pinned items:", err);
+      }
+    } finally {
+      setLoadingPinned(false);
+    }
+  }
+
+  async function performUserSearch() {
+    setSearchingUsers(true);
+    try {
+      const res = await searchUsers(searchQuery);
+      if (res.success) {
+        const currentMemberIds = activeWorkspace?.members.map((m: any) =>
+          typeof m.user === "object" ? m.user._id : m.user
+        ) || [];
+        setSearchResults(
+          res.users.filter((u) => u._id !== user?._id && !currentMemberIds.includes(u._id))
+        );
+      }
+    } catch (err) {
+      console.error("User search error:", err);
+    } finally {
+      setSearchingUsers(false);
+    }
+  }
+
+  useEffect(() => {
+    if (activeWorkspace) {
+      const refresh = setTimeout(() => {
+        void loadWorkspaceAnalytics();
+      }, 0);
+      return () => clearTimeout(refresh);
+    } else {
+      const reset = setTimeout(() => {
+        setAnalytics(null);
+        setStats({ total: 0, completed: 0, inProgress: 0 });
+      }, 0);
+      return () => clearTimeout(reset);
+    }
+  }, [activeWorkspace, projects]);
+
+  useEffect(() => {
+    if (activeWorkspace) {
+      const refresh = setTimeout(() => {
+        void loadActivities();
+      }, 0);
+      return () => clearTimeout(refresh);
+    } else {
+      const reset = setTimeout(() => setActivities([]), 0);
+      return () => clearTimeout(reset);
+    }
+  }, [activeWorkspace]);
+
+  useEffect(() => {
+    if (user) {
+      const refresh = setTimeout(() => {
+        void loadPinnedItems();
+      }, 0);
+      return () => clearTimeout(refresh);
+    }
+  }, [activeWorkspace, projects, user]);
+
+  useEffect(() => {
+    const d = setTimeout(() => {
+      if (globalQuery.trim().length >= 2) performGlobalSearch();
+      else setGlobalResults(null);
+    }, 400);
+    return () => clearTimeout(d);
+  }, [globalQuery]);
 
   const handleSelectWorkspaceFromSearch = async (ws: any) => {
     setSearchModalVisible(false);
@@ -255,19 +344,6 @@ export default function HomeScreen() {
     }
   };
 
-  const loadActivities = async () => {
-    if (!activeWorkspace) return;
-    setLoadingActivities(true);
-    try {
-      const res = await getWorkspaceActivities(activeWorkspace._id);
-      if (res.success) setActivities(res.activities);
-    } catch (err) {
-      console.error("Error loading activities:", err);
-    } finally {
-      setLoadingActivities(false);
-    }
-  };
-
   const getActivityIcon = (action: string): any => {
     switch (action) {
       case "task_created":        return "add-circle-outline";
@@ -279,53 +355,16 @@ export default function HomeScreen() {
     }
   };
 
-  const loadWorkspaceAnalytics = async () => {
-    if (!activeWorkspace) return;
-    setLoadingStats(true);
-    try {
-      const res = await getWorkspaceAnalytics(activeWorkspace._id);
-      if (res.success) {
-        setAnalytics(res.analytics);
-        setStats({
-          total:      res.analytics.summary.total,
-          completed:  res.analytics.summary.completed,
-          inProgress: res.analytics.summary.inProgress,
-        });
-      }
-    } catch (err) {
-      console.error("Error loading workspace analytics:", err);
-    } finally {
-      setLoadingStats(false);
-    }
-  };
-
-  const loadPinnedItems = async () => {
-    setLoadingPinned(true);
-    try {
-      const res = await getPinnedItemsApi();
-      if (res.success) {
-        setPinnedProjects(res.pinnedProjects || []);
-        setPinnedTasks(res.pinnedTasks || []);
-      }
-    } catch (err: any) {
-      if (err?.response?.status === 401) {
-        console.warn("Session expired loading pinned items (401)");
-      } else {
-        console.error("Error loading pinned items:", err);
-      }
-    } finally {
-      setLoadingPinned(false);
-    }
-  };
-
   const handleUploadLogo = async () => {
-    if (!activeWorkspace) return;
-    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!perm.granted) {
-      Alert.alert("Permission denied", "Media library access is required.");
-      return;
-    }
+    if (!activeWorkspace || uploadingLogo) return;
+    setUploadingLogo(true);
     try {
+      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!perm.granted) {
+        Alert.alert("Permission denied", "Media library access is required.");
+        setUploadingLogo(false);
+        return;
+      }
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ["images"],
         allowsEditing: true,
@@ -333,7 +372,6 @@ export default function HomeScreen() {
         quality: 0.8,
       });
       if (!result.canceled && result.assets?.[0]) {
-        setUploadingLogo(true);
         const asset = result.assets[0];
         const formData = await createUploadFormData({
           uri: asset.uri,
@@ -370,47 +408,28 @@ export default function HomeScreen() {
     return () => clearTimeout(d);
   }, [searchQuery]);
 
-  const performUserSearch = async () => {
-    setSearchingUsers(true);
-    try {
-      const res = await searchUsers(searchQuery);
-      if (res.success) {
-        const currentMemberIds = activeWorkspace?.members.map((m: any) =>
-          typeof m.user === "object" ? m.user._id : m.user
-        ) || [];
-        setSearchResults(
-          res.users.filter((u) => u._id !== user?._id && !currentMemberIds.includes(u._id))
-        );
-      }
-    } catch (err) {
-      console.error("User search error:", err);
-    } finally {
-      setSearchingUsers(false);
-    }
-  };
-
   const handleInviteUser = async (targetUserId: string) => {
     if (!activeWorkspace) return;
     const workspaceId = activeWorkspace._id;
     setConfirmDialog({
-      title: "Add Workspace Member",
-      message: "Are you sure you want to add this user to the workspace?",
+      title: "Invite Workspace Member",
+      message: "Send this user an invitation? They will join only after accepting it.",
       actions: [
         { text: "Cancel", style: "cancel" },
         {
-          text: "Add Member",
+          text: "Send Invite",
           onPress: async () => {
             setInvitingUserId(targetUserId);
             try {
               const res = await addMemberToWorkspace(workspaceId, targetUserId);
               if (res.success) {
-                Alert.alert("Success", "Workspace invitation sent successfully!");
+                Alert.alert("Success", "Workspace invitation sent. They will appear after accepting.");
                 setSearchQuery("");
                 setSearchResults([]);
                 await refreshWorkspaces();
               }
             } catch (err: any) {
-              Alert.alert("Error", err?.response?.data?.message || "Failed to add member.");
+              Alert.alert("Error", err?.response?.data?.message || "Failed to send invitation.");
             } finally {
               setInvitingUserId(null);
             }
@@ -476,6 +495,7 @@ export default function HomeScreen() {
   const handleLeaveWorkspace = () => {
     if (!activeWorkspace) return;
     const workspaceId = activeWorkspace._id;
+    setManageModalVisible(false);
     setConfirmDialog({
       title: "Leave Workspace",
       message: "Are you sure you want to leave this workspace?",
@@ -569,16 +589,15 @@ export default function HomeScreen() {
         <View style={{ width: 88, height: 88, borderRadius: 26, backgroundColor: T.card, alignItems: "center", justifyContent: "center", marginBottom: 24, borderWidth: 0.5, borderColor: T.cardBorder }}>
           <Ionicons name="rocket-outline" size={40} color={T.accent} />
         </View>
-        <Text style={{ color: T.textPrimary, fontSize: 22, fontWeight: "600", textAlign: "center" }}>Let's build your space</Text>
+        <Text style={{ color: T.textPrimary, fontSize: 22, fontWeight: "600", textAlign: "center" }}>Set up your workspace</Text>
         <Text style={{ color: T.textSecondary, fontSize: 14, textAlign: "center", marginTop: 10, lineHeight: 22, maxWidth: 260 }}>
-          Spin up a workspace and bring your whole team along for the ride.
+          Create a workspace to organise projects,tasks,and your team.
         </Text>
         <TouchableOpacity
           onPress={() => router.push("/(tabs)/createWorkspace")}
           activeOpacity={0.85}
           style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 28, paddingVertical: 14, borderRadius: 16, marginTop: 28, backgroundColor: T.accent }}
         >
-          <Ionicons name="sparkles" size={16} color={T.onAccent} style={{ marginRight: 8 }} />
           <Text style={{ color: T.onAccent, fontWeight: "600", fontSize: 15 }}>Create Workspace</Text>
         </TouchableOpacity>
         <TouchableOpacity
@@ -950,12 +969,12 @@ export default function HomeScreen() {
             {/* member count pill */}
             <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 14 }}>
               <View style={{ paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20, backgroundColor: T.input, borderWidth: 0.5, borderColor: T.cardBorder }}>
-                <Text style={{ fontSize: 11, color: T.textSecondary }}>{activeWorkspace?.members?.length ?? 0} members</Text>
+            <Text style={{ fontSize: 11, color: T.textSecondary }}>{activeWorkspace?.members?.filter((m: any) => m.status !== "pending").length ?? 0} members</Text>
               </View>
             </View>
 
             <View style={{ backgroundColor: T.card, borderWidth: 0.5, borderColor: T.cardBorder, borderRadius: 16, overflow: "hidden", marginBottom: 32 }}>
-              {activeWorkspace?.members.map((member: any, index: number) => {
+              {activeWorkspace?.members.filter((m: any) => m.status !== "pending").map((member: any, index: number) => {
                 const isMemberObject = typeof member.user === "object";
                 const memberId  = isMemberObject ? member.user._id : member.user;
                 const firstname = isMemberObject ? member.user.username.firstname : "User";
@@ -964,7 +983,8 @@ export default function HomeScreen() {
                 const role      = member.role;
                 const isMe      = memberId === user?._id;
                 const avatarColors = getAvatarColors(firstname);
-                const isLast    = index === activeWorkspace.members.length - 1;
+                const joinedMembers = activeWorkspace.members.filter((m: any) => m.status !== "pending");
+                const isLast    = index === joinedMembers.length - 1;
 
                 // role badge color
                 const roleBg   = role === "admin" ? "rgba(88,101,242,0.12)" : T.input;
@@ -1144,7 +1164,7 @@ export default function HomeScreen() {
                 {(!globalResults.tasks?.length && !globalResults.projects?.length && !globalResults.workspaces?.length && !globalResults.users?.length) && (
                   <View style={{ alignItems: "center", justifyContent: "center", paddingVertical: 48 }}>
                     <Ionicons name="search-outline" size={30} color={T.textMuted} style={{ marginBottom: 8 }} />
-                    <Text style={{ fontSize: 13, color: T.textSecondary }}>No results found for "{globalQuery}"</Text>
+                    <Text style={{ fontSize: 13, color: T.textSecondary }}>No results found for {globalQuery}</Text>
                   </View>
                 )}
               </View>
@@ -1211,7 +1231,7 @@ export default function HomeScreen() {
           <View style={{ backgroundColor: T.card, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, paddingBottom: 36, borderTopWidth: 0.5, borderTopColor: T.cardBorder }}>
             <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: T.input, alignSelf: "center", marginBottom: 20 }} />
             <Text style={{ fontSize: 18, fontWeight: "600", color: T.textPrimary, marginBottom: 6 }}>Workspace settings</Text>
-            <Text style={{ fontSize: 13, color: T.textSecondary, marginBottom: 20 }}>Actions for "{activeWorkspace?.name}"</Text>
+            <Text style={{ fontSize: 13, color: T.textSecondary, marginBottom: 20 }}>Actions for {activeWorkspace?.name}</Text>
 
             {canManage && (
               <TouchableOpacity onPress={handleUploadLogo}

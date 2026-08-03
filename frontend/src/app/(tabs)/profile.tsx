@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   View,
   Text,
@@ -43,11 +43,44 @@ export default function ProfileScreen() {
   const [error, setError] = useState("");
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
 
+  const [localPrefs, setLocalPrefs] = useState<{
+    comments: boolean;
+    assignments: boolean;
+    mentions: boolean;
+    reminders: boolean;
+  }>({
+    comments: user?.notificationPreferences?.comments ?? true,
+    assignments: user?.notificationPreferences?.assignments ?? true,
+    mentions: user?.notificationPreferences?.mentions ?? true,
+    reminders: user?.notificationPreferences?.reminders ?? true,
+  });
+  const prefsSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (user?.notificationPreferences) {
+      setLocalPrefs({
+        comments: user.notificationPreferences.comments ?? true,
+        assignments: user.notificationPreferences.assignments ?? true,
+        mentions: user.notificationPreferences.mentions ?? true,
+        reminders: user.notificationPreferences.reminders ?? true,
+      });
+    }
+  }, [user?.notificationPreferences]);
+
+  useEffect(() => {
+    return () => {
+      if (prefsSaveTimer.current) clearTimeout(prefsSaveTimer.current);
+    };
+  }, []);
+
   const handlePickAvatar = async () => {
+    if (uploadingAvatar) return;
+    setUploadingAvatar(true);
     try {
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (status !== "granted") {
         Alert.alert("Permission Denied", "We need permission to access your photos to set an avatar.");
+        setUploadingAvatar(false);
         return;
       }
 
@@ -62,14 +95,17 @@ export default function ProfileScreen() {
         const selectedImg = result.assets[0];
         await handleUploadImage(
           selectedImg.uri,
-          selectedImg.fileName || `avatar_${Date.now()}.jpg`,
+          selectedImg.fileName || "avatar.jpg",
           selectedImg.mimeType || "image/jpeg",
           selectedImg.file
         );
+      } else {
+        setUploadingAvatar(false);
       }
     } catch (err) {
       console.error("Image picking error:", err);
       Alert.alert("Error", "Could not pick image.");
+      setUploadingAvatar(false);
     }
   };
 
@@ -142,23 +178,26 @@ export default function ProfileScreen() {
     ]);
   };
 
-  const handleTogglePreference = async (key: "comments" | "assignments" | "mentions" | "reminders", val: boolean) => {
-    try {
-      const currentPrefs = user?.notificationPreferences || {
-        comments: true,
-        assignments: true,
-        mentions: true,
-        reminders: true,
-      };
-      const newPrefs = { ...currentPrefs, [key]: val };
-      const res = await updatePreferencesApi(newPrefs);
-      if (res.success) {
-        setUser({ ...user, notificationPreferences: res.user.notificationPreferences });
-      }
-    } catch (err: any) {
-      console.error("Failed to update preferences:", err);
-      Alert.alert("Error", "Failed to save notification preferences.");
-    }
+  const handleTogglePreference = (key: "comments" | "assignments" | "mentions" | "reminders", val: boolean) => {
+    const prevPrefs = localPrefs;
+    const newPrefs = { ...prevPrefs, [key]: val };
+
+    setLocalPrefs(newPrefs);
+
+    if (prefsSaveTimer.current) clearTimeout(prefsSaveTimer.current);
+    prefsSaveTimer.current = setTimeout(() => {
+      updatePreferencesApi(newPrefs)
+        .then((res) => {
+          if (res.success && res.user?.notificationPreferences && user) {
+            void setUser({ ...user, notificationPreferences: res.user.notificationPreferences });
+          }
+        })
+        .catch((err) => {
+          console.error("Failed to update preferences:", err);
+          setLocalPrefs(prevPrefs);
+          Alert.alert("Error", "Failed to save notification preferences.");
+        });
+    }, 250);
   };
 
   const getInitials = () => {
@@ -276,20 +315,8 @@ export default function ProfileScreen() {
             marginBottom: 8,
           }}
         >
-          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
-            <View>
-              <Text style={{ color: C.textPrimary, fontSize: 14, fontWeight: "600" }}>Dark Mode</Text>
-              <Text style={{ color: C.textMuted, fontSize: 11, marginTop: 2 }}>Toggle application styling mode</Text>
-            </View>
-            <Switch
-              value={isDarkMode}
-              onValueChange={setIsDarkMode}
-              trackColor={{ false: "#DEE2E6", true: themeColor }}
-              thumbColor={Platform.OS === "ios" ? undefined : "#fff"}
-            />
-          </View>
 
-          <View style={{ height: 0.5, backgroundColor: C.border, marginBottom: 14 }} />
+      
 
           <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
             <View style={{ flex: 1, paddingRight: 10 }}>
@@ -370,7 +397,7 @@ export default function ProfileScreen() {
               <Text style={{ color: C.textMuted, fontSize: 11, marginTop: 2 }}>Notify when a task has new comments</Text>
             </View>
             <Switch
-              value={user?.notificationPreferences?.comments ?? true}
+              value={localPrefs.comments}
               onValueChange={(val) => handleTogglePreference("comments", val)}
               trackColor={{ false: "#232630", true: themeColor }}
               thumbColor={Platform.OS === "ios" ? undefined : "#fff"}
@@ -385,7 +412,7 @@ export default function ProfileScreen() {
               <Text style={{ color: C.textMuted, fontSize: 11, marginTop: 2 }}>Notify when you are assigned to a task</Text>
             </View>
             <Switch
-              value={user?.notificationPreferences?.assignments ?? true}
+              value={localPrefs.assignments}
               onValueChange={(val) => handleTogglePreference("assignments", val)}
               trackColor={{ false: "#232630", true: themeColor }}
               thumbColor={Platform.OS === "ios" ? undefined : "#fff"}
@@ -400,7 +427,7 @@ export default function ProfileScreen() {
               <Text style={{ color: C.textMuted, fontSize: 11, marginTop: 2 }}>Notify when someone mentions you using @</Text>
             </View>
             <Switch
-              value={user?.notificationPreferences?.mentions ?? true}
+              value={localPrefs.mentions}
               onValueChange={(val) => handleTogglePreference("mentions", val)}
               trackColor={{ false: "#232630", true: themeColor }}
               thumbColor={Platform.OS === "ios" ? undefined : "#fff"}
@@ -415,7 +442,7 @@ export default function ProfileScreen() {
               <Text style={{ color: C.textMuted, fontSize: 11, marginTop: 2 }}>Notify when deadlines are approaching</Text>
             </View>
             <Switch
-              value={user?.notificationPreferences?.reminders ?? true}
+              value={localPrefs.reminders}
               onValueChange={(val) => handleTogglePreference("reminders", val)}
               trackColor={{ false: "#232630", true: themeColor }}
               thumbColor={Platform.OS === "ios" ? undefined : "#fff"}

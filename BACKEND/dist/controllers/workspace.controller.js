@@ -84,7 +84,8 @@ exports.updateWorkspaceController = updateWorkspaceController;
 // ADD MEMBER
 const addUserToWorkspaceController = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
-        const workspace = yield (0, workspace_service_1.addUserToWorkspace)(req.params.workspaceId, req.body.userId);
+        const user = req.user;
+        const workspace = yield (0, workspace_service_1.addUserToWorkspace)(req.params.workspaceId, req.body.userId, user._id);
         res.status(200).json({
             success: true,
             workspace,

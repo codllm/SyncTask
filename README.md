@@ -113,7 +113,7 @@ task-project-management/
 │   ├── package.json
 │   └── tsconfig.json
 │
-└── FRONTED/                    # Expo React Native mobile client
+└── frontend/                   # Expo React Native mobile client
     ├── src/
     │   ├── api/                # Axios API communication services
     │   │   ├── auth.api.ts
@@ -272,7 +272,7 @@ api_key=your_cloudinary_api_key
 api_secret=your_cloudinary_api_secret
 ```
 
-### Frontend Configuration (`FRONTED/.env`)
+### Frontend Configuration (`frontend/.env`)
 ```env
 EXPO_PUBLIC_API_URL=http://localhost:5137
 ```
@@ -304,7 +304,7 @@ npx ts-node src/seed-dry-run.ts
 ### 3. Run the Frontend Client
 1. Navigate to the frontend folder:
    ```bash
-   cd ../FRONTED
+   cd ../frontend
    ```
 2. Install dependencies:
    ```bash

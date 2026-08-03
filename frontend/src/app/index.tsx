@@ -4,7 +4,7 @@ export default function IndexScreen() {
   return (
     <View
       className="flex-1 items-center justify-center"
-      style={{ backgroundColor: "#0B0F19" }}
+      style={{ backgroundColor: "#15171C" }}
     >
 
       <Image

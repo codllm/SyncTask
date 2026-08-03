@@ -7,7 +7,16 @@ import Workspace from "../model/workspace.model";
 interface CreateNotificationPayload {
   recipient: string | mongoose.Types.ObjectId;
   sender?: string | mongoose.Types.ObjectId;
-  type: "TASK_ASSIGNED" | "TASK_UPDATED" | "PROJECT_ADDED" | "WORKSPACE_INVITE" | "COMMENT_ADDED";
+  type:
+    | "TASK_ASSIGNED"
+    | "TASK_UPDATED"
+    | "PROJECT_ADDED"
+    | "PROJECT_MEMBER_ADDED"
+    | "WORKSPACE_INVITE"
+    | "WORKSPACE_INVITE_SENT"
+    | "WORKSPACE_INVITE_ACCEPTED"
+    | "WORKSPACE_INVITE_DECLINED"
+    | "COMMENT_ADDED";
   title: string;
   message: string;
   link?: string;
@@ -44,6 +53,38 @@ export const createNotification = async (
   );
 
   return notification;
+};
+
+export const notifyWorkspaceManagers = async (
+  workspaceId: string | mongoose.Types.ObjectId,
+  senderId: string | mongoose.Types.ObjectId,
+  payload: Omit<CreateNotificationPayload, "recipient" | "sender" | "workspace">
+) => {
+  const workspace = await Workspace.findById(workspaceId);
+  if (!workspace) return;
+
+  const sender = senderId.toString();
+  const managerIds = new Set<string>();
+
+  managerIds.add(workspace.owner.toString());
+  for (const member of workspace.members) {
+    if (member.status === "joined" && ["owner", "admin"].includes(member.role)) {
+      managerIds.add(member.user.toString());
+    }
+  }
+
+  managerIds.delete(sender);
+
+  await Promise.all(
+    Array.from(managerIds).map((recipient) =>
+      createNotification({
+        ...payload,
+        recipient,
+        sender,
+        workspace: workspace._id,
+      })
+    )
+  );
 };
 
 /**
@@ -142,15 +183,22 @@ export const acceptWorkspaceInvite = async (
     throw new Error("Workspace not found");
   }
 
-  const member = workspace.members.find(
-    (m) => m.user.toString() === userId
-  );
+  let member = workspace.members.find((m) => m.user.toString() === userId);
 
-  if (!member) {
-    throw new Error("You are not invited to this workspace");
+  if (member?.status === "joined") {
+    throw new Error("You have already joined this workspace");
   }
 
-  member.status = "joined";
+  if (member) {
+    member.status = "joined";
+  } else {
+    workspace.members.push({
+      user: new mongoose.Types.ObjectId(userId),
+      role: "member",
+      status: "joined",
+    });
+  }
+
   await workspace.save();
 
   notification.inviteStatus = "accepted";
@@ -163,8 +211,21 @@ export const acceptWorkspaceInvite = async (
 
   if (populated) {
     emitToUser(userId, "notification:updated", populated);
+    await notifyWorkspaceManagers(workspace._id, userId, {
+      type: "WORKSPACE_INVITE_ACCEPTED",
+      title: "Workspace Invite Accepted",
+      message: `A user accepted the invitation to join "${workspace.name}"`,
+      link: `/workspaces/${workspace._id}`,
+    });
     return populated;
   }
+
+  await notifyWorkspaceManagers(workspace._id, userId, {
+    type: "WORKSPACE_INVITE_ACCEPTED",
+    title: "Workspace Invite Accepted",
+    message: `A user accepted the invitation to join "${workspace.name}"`,
+    link: `/workspaces/${workspace._id}`,
+  });
 
   return notification;
 };
@@ -207,8 +268,21 @@ export const declineWorkspaceInvite = async (
 
   if (populated) {
     emitToUser(userId, "notification:updated", populated);
+    await notifyWorkspaceManagers(workspaceId, userId, {
+      type: "WORKSPACE_INVITE_DECLINED",
+      title: "Workspace Invite Declined",
+      message: "A user declined a workspace invitation",
+      link: `/workspaces/${workspaceId}`,
+    });
     return populated;
   }
+
+  await notifyWorkspaceManagers(workspaceId, userId, {
+    type: "WORKSPACE_INVITE_DECLINED",
+    title: "Workspace Invite Declined",
+    message: "A user declined a workspace invitation",
+    link: `/workspaces/${workspaceId}`,
+  });
 
   return notification;
 };

@@ -13,6 +13,7 @@ import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { loginApi, loginGoogleApi, loginAppleApi } from "../../api/user.api";
 import { useApp } from "../../context/AppContext";
+import * as storage from "../../utils/storage";
 
 // ─── Theme (matches Home / Tasks / Notifications / Profile screens) ───────────
 const T = {
@@ -100,6 +101,9 @@ export default function LoginScreen() {
       if (res.success && res.token) {
         setShowOAuthModal(false);
         await setToken(res.token);
+        if (res.refreshToken) {
+          await storage.setItemAsync("refreshToken", res.refreshToken);
+        }
         await setUser(res.user);
         router.replace("/(tabs)/home");
       } else {
@@ -129,6 +133,9 @@ export default function LoginScreen() {
       const data = await loginApi({ email: email.trim(), password });
       if (data.success && data.token) {
         await setToken(data.token);
+        if (data.refreshToken) {
+          await storage.setItemAsync("refreshToken", data.refreshToken);
+        }
         await setUser(data.user);
         router.replace("/(tabs)/home");
       } else {
@@ -165,9 +172,9 @@ export default function LoginScreen() {
             {/* Logo badge */}
             <View
               style={{
-                width: 52,
-                height: 52,
-                borderRadius: 16,
+                width: 40,
+                height: 40,
+                borderRadius: 10,
                 backgroundColor: T.accentBg,
                 borderWidth: 0.5,
                 borderColor: T.accent + "40",
@@ -223,7 +230,7 @@ export default function LoginScreen() {
                   <Ionicons name="mail-outline" size={17} color={T.iconMuted} />
                   <TextInput
                     style={{ flex: 1, color: T.textPrimary, paddingVertical: 14, fontSize: 15 }}
-                    placeholder="you@example.com"
+                    placeholder="nishant@gmail.com"
                     placeholderTextColor={T.placeholder}
                     keyboardType="email-address"
                     autoCapitalize="none"
@@ -274,11 +281,6 @@ export default function LoginScreen() {
                 </View>
               </View>
 
-              <TouchableOpacity style={{ alignSelf: "flex-end", marginBottom: 18, marginTop: 4 }}>
-                <Text style={{ color: T.accentText, fontSize: 13, fontWeight: "600" }}>
-                  Forgot password?
-                </Text>
-              </TouchableOpacity>
 
               {error ? (
                 <View
@@ -320,69 +322,17 @@ export default function LoginScreen() {
               </TouchableOpacity>
             </View>
 
-            {/* Divider */}
-            <View style={{ flexDirection: "row", alignItems: "center", marginVertical: 24 }}>
-              <View style={{ flex: 1, height: 0.5, backgroundColor: T.border }} />
-              <Text style={{ color: T.textMuted, marginHorizontal: 14, fontSize: 12 }}>
-                or continue with
-              </Text>
-              <View style={{ flex: 1, height: 0.5, backgroundColor: T.border }} />
-            </View>
 
-            {/* Social */}
-            <View style={{ flexDirection: "row", gap: 12 }}>
-              <TouchableOpacity
-                onPress={() => triggerOAuth("Google")}
-                activeOpacity={0.8}
-                style={{
-                  flex: 1,
-                  flexDirection: "row",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  gap: 8,
-                  backgroundColor: T.surface,
-                  borderWidth: 0.5,
-                  borderColor: T.border,
-                  borderRadius: 14,
-                  paddingVertical: 13,
-                }}
-              >
-                <Ionicons name="logo-google" size={16} color={T.textSecondary} />
-                <Text style={{ color: T.textPrimary, fontWeight: "600", fontSize: 14 }}>
-                  Google
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={() => triggerOAuth("Apple")}
-                activeOpacity={0.8}
-                style={{
-                  flex: 1,
-                  flexDirection: "row",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  gap: 8,
-                  backgroundColor: T.surface,
-                  borderWidth: 0.5,
-                  borderColor: T.border,
-                  borderRadius: 14,
-                  paddingVertical: 13,
-                }}
-              >
-                <Ionicons name="logo-apple" size={17} color={T.textSecondary} />
-                <Text style={{ color: T.textPrimary, fontWeight: "600", fontSize: 14 }}>
-                  Apple
-                </Text>
-              </TouchableOpacity>
-            </View>
+            
 
             {/* Footer link */}
             <View style={{ flexDirection: "row", justifyContent: "center", marginTop: 28 }}>
               <Text style={{ color: T.textMuted, fontSize: 14 }}>
-                Don't have an account?{" "}
+                New to SyncTask?{" "}
               </Text>
               <TouchableOpacity onPress={() => router.push("/(auth)/register")}>
                 <Text style={{ color: T.accentText, fontWeight: "700", fontSize: 14 }}>
-                  Sign up
+                  Create account
                 </Text>
               </TouchableOpacity>
             </View>

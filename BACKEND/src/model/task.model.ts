@@ -204,6 +204,10 @@ const taskSchema = new Schema<ITask>(
   }
 );
 
+taskSchema.index({ project: 1, isDeleted: 1 });
+taskSchema.index({ assignedTo: 1, isDeleted: 1 });
+taskSchema.index({ createdBy: 1 });
+
 const TaskModel = mongoose.model<ITask>("Task", taskSchema);
 
 export default TaskModel;

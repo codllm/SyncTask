@@ -20,7 +20,6 @@ export interface Project {
   workspace: string;
   owner: string;
   members: ProjectMember[];
-  coverImageUrl?: string;
   createdAt: string;
   updatedAt: string;
   color?: string;
@@ -35,13 +34,11 @@ export interface CreateProjectPayload {
   description?: string;
   workspace: string;
   color?: string;
-  coverImageUrl?: string;
 }
 
 export interface UpdateProjectPayload {
   name?: string;
   description?: string;
-  coverImageUrl?: string;
 }
 
 export const createProject = async (data: CreateProjectPayload): Promise<{ success: boolean; project: Project }> => {

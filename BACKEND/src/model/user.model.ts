@@ -7,6 +7,7 @@ interface IUserMethods {
   hashPassword(password: string): Promise<string>;
   comparePassword(password: string): Promise<boolean>;
   generateToken(): string;
+  generateRefreshToken(): string;
 }
 
 // Combine the standard Mongoose Document, fields, and our custom methods
@@ -35,18 +36,6 @@ export interface IUser extends Document, IUserMethods {
   pinnedProjects?: mongoose.Types.ObjectId[];
   pinnedTasks?: mongoose.Types.ObjectId[];
   avatarUrl?: string;
-  savedFilters?: {
-    name: string;
-    project: mongoose.Types.ObjectId;
-    query: {
-      assignee?: string | null;
-      priority?: string | null;
-      dueDate?: string | null;
-      label?: string | null;
-      sortBy?: string;
-      sortOrder?: string;
-    };
-  }[];
   pushTokens?: string[];
   themeColor?: string;
 }
@@ -128,20 +117,6 @@ const UserSchema = new Schema<IUser, {}, IUserMethods>({
     type: String,
     default: "",
   },
-  savedFilters: [
-    {
-      name: { type: String, required: true },
-      project: { type: Schema.Types.ObjectId, ref: "Project", required: true },
-      query: {
-        assignee: { type: String, default: null },
-        priority: { type: String, default: null },
-        dueDate: { type: String, default: null },
-        label: { type: String, default: null },
-        sortBy: { type: String, default: "position" },
-        sortOrder: { type: String, default: "asc" },
-      },
-    },
-  ],
   pushTokens: [{ type: String }],
   themeColor: {
     type: String,
@@ -169,6 +144,11 @@ UserSchema.methods.generateToken = function (): string {
 
   const secret = process.env.JWT_SECRET_KEY || 'your-fallback-secret';
   return jwt.sign({ id: this._id }, secret, { expiresIn: '1d' });
+};
+
+UserSchema.methods.generateRefreshToken = function (): string {
+  const secret = process.env.JWT_REFRESH_SECRET_KEY || process.env.JWT_SECRET_KEY || 'your-fallback-secret';
+  return jwt.sign({ id: this._id }, secret, { expiresIn: '7d' });
 };
 
 // 5. Create and export the model

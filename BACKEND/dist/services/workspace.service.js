@@ -15,6 +15,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.deleteWorkspace = exports.leaveWorkspace = exports.changeWorkspaceRole = exports.removeUserFromWorkspace = exports.addUserToWorkspace = exports.updateWorkspace = exports.getUserWorkspaces = exports.getWorkspaceById = exports.createWorkspace = void 0;
 const workspace_model_1 = __importDefault(require("../model/workspace.model"));
 const project_model_1 = __importDefault(require("../model/project.model"));
+const notification_model_1 = __importDefault(require("../model/notification.model"));
 const mongoose_1 = __importDefault(require("mongoose"));
 const notification_service_1 = require("./notification.service");
 // CREATE WORKSPACE
@@ -41,6 +42,7 @@ const getWorkspaceById = (workspaceId) => __awaiter(void 0, void 0, void 0, func
     if (!workspace) {
         throw new Error("Workspace not found");
     }
+    workspace.members = workspace.members.filter((member) => member.status !== "pending");
     return workspace;
 });
 exports.getWorkspaceById = getWorkspaceById;
@@ -66,6 +68,9 @@ const getUserWorkspaces = (userId) => __awaiter(void 0, void 0, void 0, function
     })
         .populate("owner")
         .populate("members.user");
+    for (const workspace of workspaces) {
+        workspace.members = workspace.members.filter((member) => member.status !== "pending");
+    }
     return workspaces;
 });
 exports.getUserWorkspaces = getUserWorkspaces;
@@ -95,16 +100,22 @@ const addUserToWorkspace = (workspaceId, userId, inviterId //optional, to specif
     if (!workspace) {
         throw new Error("Workspace not found");
     }
-    const isMember = workspace.members.some((member) => member.user.toString() === userId);
-    if (isMember) {
-        throw new Error("User already exists");
+    const existingMember = workspace.members.find((member) => member.user.toString() === userId);
+    if ((existingMember === null || existingMember === void 0 ? void 0 : existingMember.status) === "joined") {
+        throw new Error("User already exists in workspace");
     }
-    workspace.members.push({
-        user: new mongoose_1.default.Types.ObjectId(userId),
-        role: "member",
-        status: "pending",
+    if ((existingMember === null || existingMember === void 0 ? void 0 : existingMember.status) === "pending") {
+        throw new Error("Workspace invitation already pending");
+    }
+    const pendingInvite = yield notification_model_1.default.findOne({
+        recipient: userId,
+        workspace: workspace._id,
+        type: "WORKSPACE_INVITE",
+        inviteStatus: "pending",
     });
-    yield workspace.save();
+    if (pendingInvite) {
+        throw new Error("Workspace invitation already pending");
+    }
     yield (0, notification_service_1.createNotification)({
         recipient: userId,
         sender: inviterId || workspace.owner.toString(),
@@ -115,6 +126,19 @@ const addUserToWorkspace = (workspaceId, userId, inviterId //optional, to specif
         workspace: workspace._id,
         inviteStatus: "pending",
     });
+    yield (0, notification_service_1.notifyWorkspaceManagers)(workspace._id, inviterId || workspace.owner.toString(), {
+        type: "WORKSPACE_INVITE_SENT",
+        title: "Workspace Invite Sent",
+        message: `An invitation was sent for workspace "${workspace.name}"`,
+        link: `/workspaces/${workspace._id}`,
+    });
+    const refreshed = yield workspace_model_1.default.findById(workspace._id)
+        .populate("owner")
+        .populate("members.user");
+    if (refreshed) {
+        refreshed.members = refreshed.members.filter((member) => member.status !== "pending");
+        return refreshed;
+    }
     return workspace;
 });
 exports.addUserToWorkspace = addUserToWorkspace;
@@ -130,7 +154,7 @@ const removeUserFromWorkspace = (workspaceId, userId) => __awaiter(void 0, void 
         workspace: workspaceId,
     }, {
         $pull: {
-            members: userId,
+            members: { user: new mongoose_1.default.Types.ObjectId(userId) },
         },
     });
     return workspace;
@@ -162,6 +186,7 @@ const leaveWorkspace = (workspaceId, userId) => __awaiter(void 0, void 0, void 0
     }
     workspace.members = workspace.members.filter((member) => member.user.toString() !== userId);
     yield workspace.save();
+    yield project_model_1.default.updateMany({ workspace: workspaceId }, { $pull: { members: { user: new mongoose_1.default.Types.ObjectId(userId) } } });
     return workspace;
 });
 exports.leaveWorkspace = leaveWorkspace;

@@ -33,11 +33,11 @@ export const createTaskController = async (
       task,
     });
 
-  } catch (error) {
+  } catch (error: any) {
 
     return res.status(500).json({
       success: false,
-      message: "Failed to create task",
+      message: error instanceof Error ? error.message : "Failed to create task",
     });
 
   }

@@ -36,7 +36,6 @@ export interface IProject extends Document {
 
   color?: string;
 
-  coverImageUrl?: string;
   isDeleted: boolean;
   deletedAt?: Date;
   columns: IProjectColumn[];
@@ -58,10 +57,6 @@ const projectSchema = new Schema<IProject>(
     color: {
       type: String,
       default: "#6C63FF",
-    },
-
-    coverImageUrl: {
-      type: String,
     },
 
     workspace: {
@@ -138,6 +133,9 @@ const projectSchema = new Schema<IProject>(
     timestamps: true,
   }
 );
+
+projectSchema.index({ workspace: 1, isDeleted: 1 });
+projectSchema.index({ "members.user": 1 });
 
 export default mongoose.model<IProject>(
   "Project",

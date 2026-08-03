@@ -16,7 +16,6 @@ interface CreateProjectPayload {
   createdBy: string;
   deadline?: Date;
   color?: string;
-  coverImageUrl?: string;
 }
 
 export const createProject = async ({
@@ -26,7 +25,6 @@ export const createProject = async ({
   createdBy,
   deadline,
   color,
-  coverImageUrl,
 }: CreateProjectPayload) => {
 
   const workspaceExists = await Workspace.findById(
@@ -44,7 +42,6 @@ export const createProject = async ({
     createdBy,
     deadline,
     color,
-    coverImageUrl,
 
     members: [
       {
@@ -57,7 +54,7 @@ export const createProject = async ({
   const otherMembers = workspaceExists.members.filter(
     (m) => {
       const memberUserId = (m && typeof m === "object" && m.user) ? m.user.toString() : (m ? m.toString() : "");
-      return memberUserId !== createdBy.toString() && memberUserId !== "";
+      return memberUserId !== createdBy.toString() && memberUserId !== "" && (m as any).status === "joined";
     }
   );
 
@@ -99,13 +96,30 @@ export const getProjectById = async (
 // GET WORKSPACE PROJECTS
 
 export const getWorkspaceProjects = async (
-  workspaceId: string
+  workspaceId: string,
+  userId?: string
 ) => {
+  const workspace = userId ? await Workspace.findById(workspaceId) : null;
+  const workspaceMember = workspace?.members.find(
+    (member) => member.user.toString() === userId && member.status === "joined"
+  );
 
-  const projects = await Project.find({
+  const canSeeAll =
+    !userId ||
+    workspace?.owner.toString() === userId ||
+    workspaceMember?.role === "owner" ||
+    workspaceMember?.role === "admin";
+
+  const query: any = {
     workspace: workspaceId,
     isDeleted: { $ne: true },
-  }).populate("members.user");
+  };
+
+  if (!canSeeAll) {
+    query["members.user"] = new mongoose.Types.ObjectId(userId);
+  }
+
+  const projects = await Project.find(query).populate("members.user");
 
   return projects;
 };
@@ -119,7 +133,6 @@ interface UpdateProjectPayload {
   description?: string;
   status?: "ACTIVE" | "COMPLETED" | "ARCHIVED";
   deadline?: Date;
-  coverImageUrl?: string;
 }
 
 export const updateProject = async ({
@@ -128,7 +141,6 @@ export const updateProject = async ({
   description,
   status,
   deadline,
-  coverImageUrl,
 }: UpdateProjectPayload) => {
 
   const project = await Project.findById(
@@ -153,10 +165,6 @@ export const updateProject = async ({
 
   if (deadline) {
     project.deadline = deadline;
-  }
-
-  if (coverImageUrl !== undefined) {
-    project.coverImageUrl = coverImageUrl;
   }
 
   await project.save();
@@ -199,7 +207,8 @@ export const deleteProject = async (
 
 export const addMemberToProject = async (
   projectId: string,
-  userId: string
+  userId: string,
+  actorId?: string
 ) => {
 
   const project = await Project.findById(
@@ -221,7 +230,8 @@ export const addMemberToProject = async (
   const isWorkspaceMember =
     workspace.members.some(
       (member) =>
-        member.user.toString() === userId
+        member.user.toString() === userId &&
+        member.status === "joined"
     );
 
   if (!isWorkspaceMember) {
@@ -250,6 +260,38 @@ export const addMemberToProject = async (
   });
 
   await project.save();
+
+  await createNotification({
+    recipient: userId,
+    sender: actorId || project.createdBy.toString(),
+    type: "PROJECT_MEMBER_ADDED",
+    title: "Added to Project",
+    message: `You have been added to the project "${project.name}"`,
+    link: `/projects/${project._id}`,
+  });
+
+  const responsibleIds = new Set<string>();
+  responsibleIds.add(project.createdBy.toString());
+  for (const member of project.members) {
+    if (member.role === "admin") {
+      responsibleIds.add(member.user.toString());
+    }
+  }
+  if (actorId) responsibleIds.delete(actorId.toString());
+  responsibleIds.delete(userId);
+
+  await Promise.all(
+    Array.from(responsibleIds).map((recipient) =>
+      createNotification({
+        recipient,
+        sender: actorId || project.createdBy.toString(),
+        type: "PROJECT_MEMBER_ADDED",
+        title: "Project Member Added",
+        message: `A member was added to project "${project.name}"`,
+        link: `/projects/${project._id}`,
+      })
+    )
+  );
 
   const populatedProject = await Project.findById(project._id)
     .populate("workspace")
@@ -281,6 +323,11 @@ export const removeMemberFromProject = async (
   );
 
   await project.save();
+
+  await mongoose.model("Task").updateMany(
+    { project: projectId },
+    { $pull: { assignedTo: new mongoose.Types.ObjectId(userId) } }
+  );
 
   const populatedProject = await Project.findById(project._id)
     .populate("workspace")

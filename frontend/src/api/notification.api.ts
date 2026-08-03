@@ -12,7 +12,16 @@ export interface Notification {
     email: string;
     profilePic?: string;
   };
-  type: "WORKSPACE_INVITE" | "PROJECT_ADDED" | "TASK_ASSIGNED" | "TASK_UPDATED" | "COMMENT_ADDED";
+  type:
+    | "WORKSPACE_INVITE"
+    | "WORKSPACE_INVITE_SENT"
+    | "WORKSPACE_INVITE_ACCEPTED"
+    | "WORKSPACE_INVITE_DECLINED"
+    | "PROJECT_ADDED"
+    | "PROJECT_MEMBER_ADDED"
+    | "TASK_ASSIGNED"
+    | "TASK_UPDATED"
+    | "COMMENT_ADDED";
   title: string;
   message: string;
   link?: string;

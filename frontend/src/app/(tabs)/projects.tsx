@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import {
   View,
   Text,
@@ -10,8 +10,8 @@ import {
   Modal,
   KeyboardAvoidingView,
   Platform,
-  Image,
   Pressable,
+  PanResponder,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useApp } from "../../context/AppContext";
@@ -31,10 +31,7 @@ import {
 import { getProjectTasks, Task } from "../../api/task.api";
 import { searchUsers, SearchUserResult } from "../../api/search.api";
 import { addMemberToWorkspace } from "../../api/workspace.api";
-import { uploadFile } from "../../api/upload.api";
 import { ConfirmDialog, ConfirmDialogAction } from "../../components/ConfirmDialog";
-import { createUploadFormData } from "../../utils/uploadFormData";
-import * as ImagePicker from "expo-image-picker";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 
@@ -177,8 +174,6 @@ export default function ProjectsScreen() {
   const [profileUser, setProfileUser] = useState<any>(null);
 
   const [projectStats, setProjectStats] = useState<{ [projId: string]: { completed: number; total: number } }>({});
-  const [newCoverUrl, setNewCoverUrl] = useState("");
-  const [uploadingCover, setUploadingCover] = useState(false);
   const [settingsTab, setSettingsTab] = useState<"members" | "milestones">("members");
   const [milestones, setMilestones] = useState<Milestone[]>([]);
   const [loadingMilestones, setLoadingMilestones] = useState(false);
@@ -191,10 +186,34 @@ export default function ProjectsScreen() {
     actions: ConfirmDialogAction[];
   } | null>(null);
 
+  async function loadMilestones(projId: string) {
+    setLoadingMilestones(true);
+    try {
+      const res = await getProjectMilestones(projId);
+      if (res.success) setMilestones(res.milestones);
+    } catch (e) { console.error("Failed to load milestones:", e); }
+    finally { setLoadingMilestones(false); }
+  }
+
+  async function doGlobalSearch() {
+    setSearching(true);
+    try {
+      const res = await searchUsers(query);
+      if (res.success) {
+        const wsIds = (activeWorkspace?.members ?? []).map((m: any) => getUserId(m.user));
+        setGlobalResults((res.users as SearchUserResult[]).filter((u) => u._id !== user?._id && !wsIds.includes(u._id)));
+      }
+    } catch (e) { console.error(e); }
+    finally { setSearching(false); }
+  }
+
   useEffect(() => {
     if (selProject) {
       const fresh = projects.find((p: any) => p._id === selProject._id);
-      if (fresh) setSelProject(fresh);
+      if (fresh) {
+        const update = setTimeout(() => setSelProject(fresh), 0);
+        return () => clearTimeout(update);
+      }
     }
   }, [projects]);
 
@@ -218,36 +237,21 @@ export default function ProjectsScreen() {
 
   useEffect(() => {
     if (selProject && settingsTab === "milestones") {
-      loadMilestones(selProject._id);
+      const refresh = setTimeout(() => {
+        void loadMilestones(selProject._id);
+      }, 0);
+      return () => clearTimeout(refresh);
     }
   }, [selProject, settingsTab]);
 
-  const loadMilestones = async (projId: string) => {
-    setLoadingMilestones(true);
-    try {
-      const res = await getProjectMilestones(projId);
-      if (res.success) setMilestones(res.milestones);
-    } catch (e) { console.error("Failed to load milestones:", e); }
-    finally { setLoadingMilestones(false); }
-  };
-
   useEffect(() => {
-    if (query.trim().length < 2) { setGlobalResults([]); return; }
+    if (query.trim().length < 2) {
+      const reset = setTimeout(() => setGlobalResults([]), 0);
+      return () => clearTimeout(reset);
+    }
     const t = setTimeout(doGlobalSearch, 400);
     return () => clearTimeout(t);
   }, [query]);
-
-  async function doGlobalSearch() {
-    setSearching(true);
-    try {
-      const res = await searchUsers(query);
-      if (res.success) {
-        const wsIds = (activeWorkspace?.members ?? []).map((m: any) => getUserId(m.user));
-        setGlobalResults((res.users as SearchUserResult[]).filter((u) => u._id !== user?._id && !wsIds.includes(u._id)));
-      }
-    } catch (e) { console.error(e); }
-    finally { setSearching(false); }
-  }
 
   function openManage(project: any) {
     setSelProject(project);
@@ -257,15 +261,27 @@ export default function ProjectsScreen() {
     setManageVisible(true);
   }
 
-  function closeManage() {
+  const closeManage = useCallback(() => {
     setManageVisible(false);
     setQuery("");
     setGlobalResults([]);
-  }
+  }, []);
+
+  const manageCloseResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onMoveShouldSetPanResponder: (_, gesture) => gesture.dy > 12 && Math.abs(gesture.dy) > Math.abs(gesture.dx),
+        onPanResponderRelease: (_, gesture) => {
+          if (gesture.dy > 80 || gesture.vy > 0.8) closeManage();
+        },
+      }),
+    [closeManage]
+  );
 
   const availableWsMembers = (activeWorkspace?.members ?? []).filter((wm: any) => {
     const id = getUserId(wm.user);
     const alreadyIn = (selProject?.members ?? []).some((pm: any) => getUserId(pm.user) === id);
+    if (wm.status === "pending") return false;
     if (alreadyIn) return false;
     if (query.trim() && typeof wm.user === "object") {
       const name = getFullName(wm.user).toLowerCase();
@@ -293,10 +309,9 @@ export default function ProjectsScreen() {
         description: newDesc.trim() || undefined,
         workspace: activeWorkspace._id,
         color: newColor,
-        coverImageUrl: newCoverUrl || undefined,
       });
       if (res.success) {
-        setNewName(""); setNewDesc(""); setNewColor(C.accent); setNewCoverUrl("");
+        setNewName(""); setNewDesc(""); setNewColor(C.accent);
         setCreateVisible(false);
         await refreshProjects();
       }
@@ -304,44 +319,6 @@ export default function ProjectsScreen() {
       Alert.alert("Error", err?.response?.data?.message ?? "Failed to create project.");
     } finally { setCreating(false); }
   }
-
-  const pickCoverImage = async (isNewProject: boolean) => {
-    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!perm.granted) { Alert.alert("Permission denied", "Media library access required."); return; }
-    try {
-      const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], allowsEditing: true, aspect: [3, 1], quality: 0.8 });
-      if (!result.canceled && result.assets?.[0]) {
-        setUploadingCover(true);
-        const asset = result.assets[0];
-        const formData = await createUploadFormData({
-          uri: asset.uri,
-          name: asset.fileName || `cover_${Date.now()}.jpg`,
-          type: asset.mimeType || "image/jpeg",
-          file: asset.file,
-        });
-        const uploadRes = await uploadFile(formData);
-        if (uploadRes.success) {
-          if (isNewProject) {
-            setNewCoverUrl(uploadRes.url);
-          } else if (selProject) {
-            const updateRes = await updateProject(selProject._id, { coverImageUrl: uploadRes.url });
-            if (updateRes.success) {
-              setSelProject(updateRes.project);
-              await refreshProjects();
-              Alert.alert("Success", "Cover image updated successfully!");
-            } else {
-              Alert.alert("Error", "Failed to save cover image to project.");
-            }
-          }
-        } else {
-          Alert.alert("Error", "Cover image upload failed.");
-        }
-      }
-    } catch (err: any) {
-      console.error("Cover upload error:", err);
-      Alert.alert("Error", err?.message || "Failed to upload cover.");
-    } finally { setUploadingCover(false); }
-  };
 
   const handleCreateMilestone = async () => {
     if (!newMilestoneTitle.trim() || !selProject) return;
@@ -450,32 +427,24 @@ export default function ProjectsScreen() {
     });
   }
 
-  async function handleInviteAndAdd(targetUser: SearchUserResult) {
+  async function handleInviteToWorkspace(targetUser: SearchUserResult) {
     if (!activeWorkspace || !selProject) return;
     const workspaceId = activeWorkspace._id;
-    const projectId = selProject._id;
     setConfirmDialog({
-      title: "Invite & Add",
-      message: `Add ${getFullName({ username: targetUser.username })} to workspace and project?`,
+      title: "Invite to Workspace",
+      message: `Invite ${getFullName({ username: targetUser.username })} to the workspace first. After they accept, you can add them to this project.`,
       actions: [
         { text: "Cancel", style: "cancel" },
         {
-          text: "Invite & Add",
+          text: "Send Invite",
           onPress: async () => {
             setInviteId(targetUser._id);
             try {
               const inv = await addMemberToWorkspace(workspaceId, targetUser._id);
               if (!inv.success) throw new Error("Workspace invite failed");
-              const add = await addMemberToProject(projectId, targetUser._id);
-              if (add.success) {
-                setSelProject(add.project);
-                setQuery(""); setGlobalResults([]);
-                await refreshWorkspaces(); await refreshProjects();
-                Alert.alert("Done", "Workspace invitation sent and user added to project.");
-              } else {
-                Alert.alert("Partial", "Added to workspace but failed to add to project.");
-                await refreshWorkspaces();
-              }
+              setQuery(""); setGlobalResults([]);
+              await refreshWorkspaces();
+              Alert.alert("Done", "Workspace invitation sent. Add them to the project after they accept.");
             } catch (err: any) { Alert.alert("Error", err?.response?.data?.message ?? "Something went wrong."); }
             finally { setInviteId(null); }
           },
@@ -520,6 +489,7 @@ export default function ProjectsScreen() {
       {/* ── PROJECT LIST ── */}
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: 14, paddingTop: 14, paddingBottom: 48 }}>
         {projects.length === 0 ? (
+          <TouchableOpacity onPress={()=>setCreateVisible(true)}>
           <View style={{ backgroundColor: C.card, borderRadius: 20, padding: 40, alignItems: "center", marginTop: 8, borderWidth: 1, borderColor: C.cardBorder }}>
             <Ionicons name="folder-open-outline" size={38} color={C.textMuted} style={{ marginBottom: 14 }} />
             <Text style={{ color: C.textSecondary, fontSize: 14, textAlign: "center", lineHeight: 22 }}>
@@ -527,6 +497,7 @@ export default function ProjectsScreen() {
 
             </Text>
           </View>
+          </TouchableOpacity>
         ) : projects.map((project: any) => {
           const isActive = activeProject?._id === project._id;
           const color = project.color || themeColor;
@@ -536,23 +507,7 @@ export default function ProjectsScreen() {
 
           return (
             <View key={project._id} style={{ backgroundColor: C.card, borderRadius: 20, marginBottom: 14, borderWidth: 1.5, borderColor: isActive ? color : C.cardBorder, overflow: "hidden" }}>
-              {/* Tinted banner */}
-              <View style={{ height: 58, position: "relative" }}>
-                {project.coverImageUrl ? (
-                  <Image source={{ uri: project.coverImageUrl }} style={{ width: "100%", height: 58 }} resizeMode="cover" />
-                ) : (
-                  <View style={{ width: "100%", height: 58, backgroundColor: `${color}22` }} />
-                )}
-                {isActive ? (
-                  <View style={{ position: "absolute", top: 9, right: 11, backgroundColor: `${color}25`, borderWidth: 1, borderColor: `${color}50`, paddingHorizontal: 9, paddingVertical: 3, borderRadius: 7 }}>
-                    <Text style={{ color, fontSize: 9, fontWeight: "800", textTransform: "uppercase" }}>Active</Text>
-                  </View>
-                ) : isOwner ? (
-                  <View style={{ position: "absolute", top: 9, right: 11, backgroundColor: C.cardAlt, borderWidth: 1, borderColor: C.border, paddingHorizontal: 9, paddingVertical: 3, borderRadius: 7 }}>
-                    <Text style={{ color: C.textMuted, fontSize: 9, fontWeight: "700", textTransform: "uppercase" }}>Owner</Text>
-                  </View>
-                ) : null}
-              </View>
+              <View style={{ height: 10, backgroundColor: `${color}55` }} />
 
               <View style={{ padding: 14 }}>
                 {/* Name row with icon */}
@@ -561,6 +516,15 @@ export default function ProjectsScreen() {
                     <Ionicons name="briefcase-outline" size={14} color={color} />
                   </View>
                   <Text style={{ color: C.textPrimary, fontSize: 16, fontWeight: "700", flex: 1 }}>{project.name}</Text>
+                  {isActive ? (
+                    <View style={{ backgroundColor: `${color}25`, borderWidth: 1, borderColor: `${color}50`, paddingHorizontal: 9, paddingVertical: 3, borderRadius: 7 }}>
+                      <Text style={{ color, fontSize: 9, fontWeight: "800", textTransform: "uppercase" }}>Active</Text>
+                    </View>
+                  ) : isOwner ? (
+                    <View style={{ backgroundColor: C.cardAlt, borderWidth: 1, borderColor: C.border, paddingHorizontal: 9, paddingVertical: 3, borderRadius: 7 }}>
+                      <Text style={{ color: C.textMuted, fontSize: 9, fontWeight: "700", textTransform: "uppercase" }}>Owner</Text>
+                    </View>
+                  ) : null}
                 </View>
 
                 {!!project.description && (
@@ -666,21 +630,6 @@ export default function ProjectsScreen() {
                 ))}
               </View>
 
-              <SLabel text="Project banner" />
-              <TouchableOpacity
-                onPress={() => pickCoverImage(true)}
-                style={{ backgroundColor: C.card, borderRadius: 13, borderWidth: 1, borderColor: C.cardBorder, padding: newCoverUrl ? 0 : 16, alignItems: "center", justifyContent: "center", marginBottom: 24, height: 88, overflow: "hidden" }}
-              >
-                {newCoverUrl ? (
-                  <Image source={{ uri: newCoverUrl }} style={{ width: "100%", height: "100%" }} resizeMode="cover" />
-                ) : (
-                  <View style={{ alignItems: "center", gap: 6 }}>
-                    <Ionicons name="image-outline" size={22} color={C.textMuted} />
-                    <Text style={{ color: C.textMuted, fontSize: 13 }}>{uploadingCover ? "Uploading..." : "Select banner image"}</Text>
-                  </View>
-                )}
-              </TouchableOpacity>
-
               <View style={{ flexDirection: "row", gap: 10 }}>
                 <TouchableOpacity onPress={() => setCreateVisible(false)} style={{ flex: 1, backgroundColor: C.card, borderRadius: 13, paddingVertical: 14, alignItems: "center", borderWidth: 1, borderColor: C.cardBorder }}>
                   <Text style={{ color: C.textSecondary, fontWeight: "700" }}>Cancel</Text>
@@ -700,7 +649,7 @@ export default function ProjectsScreen() {
       <Modal visible={manageVisible} transparent animationType="slide" onRequestClose={closeManage}>
         <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{ flex: 1 }}>
           <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.65)", justifyContent: "flex-end" }}>
-            <View style={{ backgroundColor: C.surface, borderTopLeftRadius: 26, borderTopRightRadius: 26, borderTopWidth: 1, borderTopColor: C.cardBorder, maxHeight: "92%", paddingBottom: 36 }}>
+            <View style={{ backgroundColor: C.surface, borderTopLeftRadius: 26, borderTopRightRadius: 26, borderTopWidth: 1, borderTopColor: C.cardBorder, maxHeight: "92%", paddingBottom: 36 }} {...manageCloseResponder.panHandlers}>
               <View style={{ alignItems: "center", paddingTop: 14, paddingBottom: 6 }}>
                 <View style={{ width: 36, height: 4, backgroundColor: C.border, borderRadius: 2 }} />
               </View>
@@ -813,7 +762,7 @@ export default function ProjectsScreen() {
                       <>
                         <Text style={{ color: C.textPrimary, fontSize: 14, fontWeight: "700", marginBottom: 4 }}>Add members</Text>
                         <Text style={{ color: C.textMuted, fontSize: 12, marginBottom: 14, lineHeight: 18 }}>
-                          Search workspace members below. Type 2+ characters to search all users globally.
+                          Add joined workspace members. Global users can be invited to the workspace first.
                         </Text>
 
                         <View style={{ backgroundColor: C.cardAlt, borderRadius: 13, borderWidth: 1, borderColor: C.cardBorder, flexDirection: "row", alignItems: "center", paddingHorizontal: 13, marginBottom: 18 }}>
@@ -871,7 +820,7 @@ export default function ProjectsScreen() {
                                   {loading ? <ActivityIndicator size="small" color={C.accent} /> : (
                                     <>
                                       <Ionicons name="add" size={14} color={C.accent} />
-                                      <Text style={{ color: C.accent, fontSize: 12, fontWeight: "700" }}>Invite</Text>
+                                      <Text style={{ color: C.accent, fontSize: 12, fontWeight: "700" }}>Add</Text>
                                     </>
                                   )}
                                 </TouchableOpacity>
@@ -898,14 +847,14 @@ export default function ProjectsScreen() {
                                       </View>
                                     </View>
                                     <TouchableOpacity
-                                      onPress={() => handleInviteAndAdd(u)}
+                                      onPress={() => handleInviteToWorkspace(u)}
                                       disabled={loading}
                                       style={{ backgroundColor: `${color}18`, borderWidth: 1.5, borderColor: `${color}45`, paddingHorizontal: 12, paddingVertical: 9, borderRadius: 10, flexDirection: "row", alignItems: "center", gap: 4 }}
                                     >
                                       {loading ? <ActivityIndicator size="small" color={color} /> : (
                                         <>
                                           <Ionicons name="person-add-outline" size={13} color={color} />
-                                          <Text style={{ color, fontSize: 12, fontWeight: "700" }}>Invite & Add</Text>
+                                          <Text style={{ color, fontSize: 12, fontWeight: "700" }}>Invite</Text>
                                         </>
                                       )}
                                     </TouchableOpacity>
@@ -922,35 +871,6 @@ export default function ProjectsScreen() {
 
                 {settingsTab === "milestones" && (
                   <View style={{ gap: 20 }}>
-                    {/* Cover image */}
-                    <View>
-                      <Text style={{ color: C.textPrimary, fontSize: 14, fontWeight: "700", marginBottom: 10 }}>Cover image banner</Text>
-                      <View style={{ backgroundColor: C.card, borderRadius: 16, overflow: "hidden", borderWidth: 1, borderColor: C.cardBorder, position: "relative" }}>
-                        {selProject?.coverImageUrl ? (
-                          <Image source={{ uri: selProject.coverImageUrl }} style={{ width: "100%", height: 110 }} resizeMode="cover" />
-                        ) : (
-                          <View style={{ width: "100%", height: 110, backgroundColor: C.bg, alignItems: "center", justifyContent: "center", gap: 6 }}>
-                            <Ionicons name="image-outline" size={28} color={C.textMuted} />
-                            <Text style={{ color: C.textMuted, fontSize: 12 }}>No cover image set</Text>
-                          </View>
-                        )}
-                        {!isViewer && (
-                          <TouchableOpacity
-                            onPress={() => pickCoverImage(false)}
-                            disabled={uploadingCover}
-                            style={{ position: "absolute", bottom: 10, right: 10, backgroundColor: "rgba(21,23,28,0.85)", borderWidth: 1, borderColor: C.cardBorder, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 9, flexDirection: "row", alignItems: "center", gap: 6 }}
-                          >
-                            {uploadingCover ? <ActivityIndicator size="small" color={selProject?.color ?? themeColor} /> : (
-                              <>
-                                <Ionicons name="camera-outline" size={13} color={C.textPrimary} />
-                                <Text style={{ color: C.textPrimary, fontSize: 11, fontWeight: "700" }}>{selProject?.coverImageUrl ? "Change" : "Upload"}</Text>
-                              </>
-                            )}
-                          </TouchableOpacity>
-                        )}
-                      </View>
-                    </View>
-
                     {/* Milestones list */}
                     <View>
                       <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>

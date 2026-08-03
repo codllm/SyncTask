@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
+import React, { createContext, useContext, useState, useEffect, ReactNode, useMemo } from "react";
 import * as storage from "../utils/storage";
 import { getProfileApi, logoutApi, updateThemeColorApi } from "../api/user.api";
 import { getUserWorkspace, Workspace } from "../api/workspace.api";
@@ -205,6 +205,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           } catch (profileErr: any) {
             if (profileErr?.response?.status === 401) {
               await storage.deleteItemAsync("token");
+              await storage.deleteItemAsync("refreshToken");
               await storage.deleteItemAsync("User");
               await storage.deleteItemAsync(ACTIVE_WORKSPACE_KEY);
               setTokenState(null);
@@ -449,6 +450,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     try {
       // Clear storage
       await storage.deleteItemAsync("token");
+      await storage.deleteItemAsync("refreshToken");
       await storage.deleteItemAsync("User");
       await storage.deleteItemAsync(ACTIVE_WORKSPACE_KEY);
     } catch (err) {
@@ -466,47 +468,65 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }
 
+  const contextValue = useMemo(
+    () => ({
+      user,
+      setUser,
+      token,
+      setToken,
+      workspaces,
+      setWorkspaces,
+      activeWorkspace,
+      setActiveWorkspace: selectWorkspace,
+      projects,
+      setProjects,
+      activeProject,
+      setActiveProject,
+      unreadCount,
+      setUnreadCount,
+      loading,
+      workspacesLoading,
+      themeColor,
+      setThemeColor,
+      isDarkMode,
+      setIsDarkMode,
+      C,
+      todoMode,
+      setTodoMode,
+      todoTasks,
+      fetchTodoTasks,
+      addTodoTask,
+      toggleTodoTask,
+      deleteTodoTask,
+      updateTodoTask,
+      refreshData,
+      refreshWorkspaces,
+      refreshProjects,
+      refreshNotifications,
+      selectWorkspace,
+      selectProject,
+      logout,
+    }),
+    [
+      user,
+      token,
+      workspaces,
+      activeWorkspace,
+      projects,
+      activeProject,
+      unreadCount,
+      loading,
+      workspacesLoading,
+      themeColor,
+      isDarkMode,
+      C,
+      todoMode,
+      todoTasks,
+    ]
+  );
+
   return (
-    <AppContext.Provider
-      value={{
-        user,
-        setUser,
-        token,
-        setToken,
-        workspaces,
-        setWorkspaces,
-        activeWorkspace,
-        setActiveWorkspace: selectWorkspace,
-        projects,
-        setProjects,
-        activeProject,
-        setActiveProject,
-        unreadCount,
-        setUnreadCount,
-        loading,
-        workspacesLoading,
-        themeColor,
-        setThemeColor,
-        isDarkMode,
-        setIsDarkMode,
-        C,
-        todoMode,
-        setTodoMode,
-        todoTasks,
-        fetchTodoTasks,
-        addTodoTask,
-        toggleTodoTask,
-        deleteTodoTask,
-        updateTodoTask,
-        refreshData,
-        refreshWorkspaces,
-        refreshProjects,
-        refreshNotifications,
-        selectWorkspace,
-        selectProject,
-        logout,
-      }}
-    >
+    <AppContext.Provider value={contextValue}>
       {children}
     </AppContext.Provider>
   );

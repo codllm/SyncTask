@@ -13,6 +13,7 @@ import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { registerApi } from "../../api/user.api";
 import { useApp } from "../../context/AppContext";
+import * as storage from "../../utils/storage";
 
 const USER_TYPES = [
   { value: "individual", label: "Individual" },
@@ -93,6 +94,9 @@ export default function RegisterScreen() {
 
       if (data.success && data.token) {
         await setToken(data.token);
+        if (data.refreshToken) {
+          await storage.setItemAsync("refreshToken", data.refreshToken);
+        }
         await setUser(data.user);
         router.replace("/(tabs)/home");
       } else {
@@ -133,7 +137,7 @@ export default function RegisterScreen() {
       >
         <Ionicons name={icon} size={17} color={T.iconMuted} />
         <TextInput
-          style={{ flex: 1, color: T.textPrimary, paddingVertical: 14, fontSize: 15 }}
+          style={{ flex: 1, color: T.textPrimary, paddingVertical: 14, fontSize: 16 }}
           placeholder={placeholder}
           placeholderTextColor={T.placeholder}
           value={form[field]}
@@ -211,9 +215,9 @@ export default function RegisterScreen() {
 
             <View
               style={{
-                width: 52,
-                height: 52,
-                borderRadius: 16,
+                width: 40,
+                height: 40,
+                borderRadius: 10,
                 backgroundColor: T.accentBg,
                 borderWidth: 0.5,
                 borderColor: T.accent + "40",
@@ -228,7 +232,7 @@ export default function RegisterScreen() {
               Create account
             </Text>
             <Text style={{ color: T.textSecondary, fontSize: 14, marginTop: 6, marginBottom: 28 }}>
-              Join SyncTask and manage work smarter
+              Bring your work together in one place. 
             </Text>
 
             <View
@@ -243,10 +247,10 @@ export default function RegisterScreen() {
               {/* Name row */}
               <View style={{ flexDirection: "row", gap: 12 }}>
                 <View style={{ flex: 1 }}>
-                  {renderInput({ field: "firstname", label: "First name", icon: "person-outline", placeholder: "John" })}
+                  {renderInput({ field: "firstname", label: "First name", icon: "person-outline", placeholder: "Nishant" })}
                 </View>
                 <View style={{ flex: 1 }}>
-                  {renderInput({ field: "lastname", label: "Last name", icon: "person-outline", placeholder: "Doe" })}
+                  {renderInput({ field: "lastname", label: "Last name", icon: "person-outline", placeholder: "Nikhil" })}
                 </View>
               </View>
 
@@ -254,7 +258,7 @@ export default function RegisterScreen() {
                 field: "email",
                 label: "Email address",
                 icon: "mail-outline",
-                placeholder: "you@example.com",
+                placeholder: "nisi@gmail.com",
                 keyboardType: "email-address",
                 autoCapitalize: "none",
               })}
@@ -272,7 +276,7 @@ export default function RegisterScreen() {
                 field: "phone",
                 label: "Phone number",
                 icon: "call-outline",
-                placeholder: "e.g. 9876543210",
+                placeholder: "e.g. 9905976075",
                 keyboardType: "phone-pad",
               })}
 

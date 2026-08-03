@@ -40,7 +40,7 @@ const createProject = (_a) => __awaiter(void 0, [_a], void 0, function* ({ name,
     });
     const otherMembers = workspaceExists.members.filter((m) => {
         const memberUserId = (m && typeof m === "object" && m.user) ? m.user.toString() : (m ? m.toString() : "");
-        return memberUserId !== createdBy.toString() && memberUserId !== "";
+        return memberUserId !== createdBy.toString() && memberUserId !== "" && m.status === "joined";
     });
     for (const member of otherMembers) {
         const memberUserId = (member && typeof member === "object" && member.user) ? member.user.toString() : member.toString();
@@ -69,11 +69,21 @@ const getProjectById = (projectId) => __awaiter(void 0, void 0, void 0, function
 });
 exports.getProjectById = getProjectById;
 // GET WORKSPACE PROJECTS
-const getWorkspaceProjects = (workspaceId) => __awaiter(void 0, void 0, void 0, function* () {
-    const projects = yield project_model_1.default.find({
+const getWorkspaceProjects = (workspaceId, userId) => __awaiter(void 0, void 0, void 0, function* () {
+    const workspace = userId ? yield workspace_model_1.default.findById(workspaceId) : null;
+    const workspaceMember = workspace === null || workspace === void 0 ? void 0 : workspace.members.find((member) => member.user.toString() === userId && member.status === "joined");
+    const canSeeAll = !userId ||
+        (workspace === null || workspace === void 0 ? void 0 : workspace.owner.toString()) === userId ||
+        (workspaceMember === null || workspaceMember === void 0 ? void 0 : workspaceMember.role) === "owner" ||
+        (workspaceMember === null || workspaceMember === void 0 ? void 0 : workspaceMember.role) === "admin";
+    const query = {
         workspace: workspaceId,
         isDeleted: { $ne: true },
-    }).populate("members.user");
+    };
+    if (!canSeeAll) {
+        query["members.user"] = new mongoose_1.default.Types.ObjectId(userId);
+    }
+    const projects = yield project_model_1.default.find(query).populate("members.user");
     return projects;
 });
 exports.getWorkspaceProjects = getWorkspaceProjects;
@@ -118,7 +128,7 @@ const deleteProject = (projectId) => __awaiter(void 0, void 0, void 0, function*
 });
 exports.deleteProject = deleteProject;
 // ADD MEMBER TO PROJECT
-const addMemberToProject = (projectId, userId) => __awaiter(void 0, void 0, void 0, function* () {
+const addMemberToProject = (projectId, userId, actorId) => __awaiter(void 0, void 0, void 0, function* () {
     const project = yield project_model_1.default.findById(projectId);
     if (!project) {
         throw new Error("Project not found");
@@ -127,7 +137,8 @@ const addMemberToProject = (projectId, userId) => __awaiter(void 0, void 0, void
     if (!workspace) {
         throw new Error("Workspace not found");
     }
-    const isWorkspaceMember = workspace.members.some((member) => member.user.toString() === userId);
+    const isWorkspaceMember = workspace.members.some((member) => member.user.toString() === userId &&
+        member.status === "joined");
     if (!isWorkspaceMember) {
         throw new Error("User is not member of workspace");
     }
@@ -140,6 +151,32 @@ const addMemberToProject = (projectId, userId) => __awaiter(void 0, void 0, void
         role: "member",
     });
     yield project.save();
+    yield (0, notification_service_1.createNotification)({
+        recipient: userId,
+        sender: actorId || project.createdBy.toString(),
+        type: "PROJECT_MEMBER_ADDED",
+        title: "Added to Project",
+        message: `You have been added to the project "${project.name}"`,
+        link: `/projects/${project._id}`,
+    });
+    const responsibleIds = new Set();
+    responsibleIds.add(project.createdBy.toString());
+    for (const member of project.members) {
+        if (member.role === "admin") {
+            responsibleIds.add(member.user.toString());
+        }
+    }
+    if (actorId)
+        responsibleIds.delete(actorId.toString());
+    responsibleIds.delete(userId);
+    yield Promise.all(Array.from(responsibleIds).map((recipient) => (0, notification_service_1.createNotification)({
+        recipient,
+        sender: actorId || project.createdBy.toString(),
+        type: "PROJECT_MEMBER_ADDED",
+        title: "Project Member Added",
+        message: `A member was added to project "${project.name}"`,
+        link: `/projects/${project._id}`,
+    })));
     const populatedProject = yield project_model_1.default.findById(project._id)
         .populate("workspace")
         .populate("members.user")
@@ -155,6 +192,7 @@ const removeMemberFromProject = (projectId, userId) => __awaiter(void 0, void 0,
     }
     project.members = project.members.filter((member) => member.user.toString() !== userId);
     yield project.save();
+    yield mongoose_1.default.model("Task").updateMany({ project: projectId }, { $pull: { assignedTo: new mongoose_1.default.Types.ObjectId(userId) } });
     const populatedProject = yield project_model_1.default.findById(project._id)
         .populate("workspace")
         .populate("members.user")

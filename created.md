@@ -8,7 +8,7 @@ This document serves as a complete directory of the project's technical architec
 
 ## 📁 1. Project Architecture & Technical Stack
 
-The codebase is split into two primary directories: `BACKEND` and `FRONTED` (the mobile client).
+The codebase is split into two primary directories: `BACKEND` and `frontend` (the mobile client).
 
 ```
 task-project-management/
@@ -23,7 +23,7 @@ task-project-management/
 │       ├── app.ts              # Express setup
 │       └── server.ts           # Server start & Socket.io server
 │
-└── FRONTED/                    # Expo React Native mobile client
+└── frontend/                   # Expo React Native mobile client
     └── src/
         ├── api/                # API client services (Axios wrappers)
         ├── app/                # Expo Router structure (screens & layouts)
@@ -252,7 +252,7 @@ Permissions are enforced both on the client UI (elements are hidden or disabled)
 
 ## 📱 5. Frontend Screens & Page Structures
 
-The client application structure is mapped out under `FRONTED/src/app` as follows:
+The client application structure is mapped out under `frontend/src/app` as follows:
 
 ### 🌟 1. Landing Screen (`index.tsx`)
 * **Behavior**: Serves as the initial entry guard. Detects whether a JWT token is stored locally. If a token is found, it directs the user to the Home dashboard; otherwise, it routes to the (auth) directory.

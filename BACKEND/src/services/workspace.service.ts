@@ -1,8 +1,9 @@
 
 import Workspace from "../model/workspace.model";
 import Project from "../model/project.model";
+import Notification from "../model/notification.model";
 import mongoose from "mongoose";
-import { createNotification } from "./notification.service";
+import { createNotification, notifyWorkspaceManagers } from "./notification.service";
 
 interface CreateWorkspacePayload {
   name: string;
@@ -49,6 +50,8 @@ export const getWorkspaceById = async (
     throw new Error("Workspace not found");
   }
 
+  workspace.members = workspace.members.filter((member) => member.status !== "pending");
+
   return workspace;
 };
 
@@ -79,6 +82,10 @@ export const getUserWorkspaces = async (
   })
     .populate("owner")
     .populate("members.user");
+
+  for (const workspace of workspaces) {
+    workspace.members = workspace.members.filter((member) => member.status !== "pending");
+  }
 
   return workspaces;
 };
@@ -143,22 +150,28 @@ export const addUserToWorkspace = async (
     throw new Error("Workspace not found");
   }
 
-  const isMember = workspace.members.some(
-    (member) =>
-      member.user.toString() === userId
+  const existingMember = workspace.members.find(
+    (member) => member.user.toString() === userId
   );
 
-  if (isMember) {
-    throw new Error("User already exists");
+  if (existingMember?.status === "joined") {
+    throw new Error("User already exists in workspace");
   }
 
-  workspace.members.push({
-    user: new mongoose.Types.ObjectId(userId),
-    role: "member",
-    status: "pending",
+  if (existingMember?.status === "pending") {
+    throw new Error("Workspace invitation already pending");
+  }
+
+  const pendingInvite = await Notification.findOne({
+    recipient: userId,
+    workspace: workspace._id,
+    type: "WORKSPACE_INVITE",
+    inviteStatus: "pending",
   });
 
-  await workspace.save();
+  if (pendingInvite) {
+    throw new Error("Workspace invitation already pending");
+  }
 
   await createNotification({
     recipient: userId,
@@ -170,6 +183,22 @@ export const addUserToWorkspace = async (
     workspace: workspace._id,
     inviteStatus: "pending",
   });
+
+  await notifyWorkspaceManagers(workspace._id, inviterId || workspace.owner.toString(), {
+    type: "WORKSPACE_INVITE_SENT",
+    title: "Workspace Invite Sent",
+    message: `An invitation was sent for workspace "${workspace.name}"`,
+    link: `/workspaces/${workspace._id}`,
+  });
+
+  const refreshed = await Workspace.findById(workspace._id)
+    .populate("owner")
+    .populate("members.user");
+
+  if (refreshed) {
+    refreshed.members = refreshed.members.filter((member) => member.status !== "pending");
+    return refreshed;
+  }
 
   return workspace;
 };
@@ -203,7 +232,7 @@ export const removeUserFromWorkspace = async (
     },
     {
       $pull: {
-        members: userId,
+        members: { user: new mongoose.Types.ObjectId(userId) },
       },
     }
   );
@@ -274,6 +303,11 @@ export const leaveWorkspace = async (
   );
 
   await workspace.save();
+
+  await Project.updateMany(
+    { workspace: workspaceId },
+    { $pull: { members: { user: new mongoose.Types.ObjectId(userId) } } }
+  );
 
   return workspace;
 };

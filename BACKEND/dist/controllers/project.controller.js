@@ -49,7 +49,8 @@ exports.getProjectByIdController = getProjectByIdController;
 // GET WORKSPACE PROJECTS
 const getWorkspaceProjectsController = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
-        const projects = yield (0, project_service_1.getWorkspaceProjects)(req.params.workspaceId);
+        const user = req.user;
+        const projects = yield (0, project_service_1.getWorkspaceProjects)(req.params.workspaceId, user._id.toString());
         res.status(200).json({
             success: true,
             projects,
@@ -100,7 +101,8 @@ exports.deleteProjectController = deleteProjectController;
 // ADD MEMBER TO PROJECT
 const addMemberToProjectController = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
-        const project = yield (0, project_service_1.addMemberToProject)(req.params.projectId, req.body.userId);
+        const user = req.user;
+        const project = yield (0, project_service_1.addMemberToProject)(req.params.projectId, req.body.userId, user._id.toString());
         res.status(200).json({
             success: true,
             project,

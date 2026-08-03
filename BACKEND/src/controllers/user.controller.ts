@@ -26,9 +26,10 @@ export const signup = async (req: Request, res: Response) => {
     const newUser = await createUser({ firstname, lastname, email, password, gender,usertype,phone });
     
     const token = newUser.generateToken();
+    const refreshToken = newUser.generateRefreshToken();
 
     console.log("New user created:", newUser); // Debugging log
-    return res.status(201).json({success:true, user: newUser, token });
+    return res.status(201).json({success:true, user: newUser, token, refreshToken });
   } catch (error: any) {
     return res.status(500).json({ message: error.message });
   }
@@ -56,7 +57,37 @@ console.log("Password Match:", passwordMatch);
   }
   //match found, generate token now
   const token = user.generateToken();
-  return res.status(200).json({ success: true, user, token });
+  const refreshToken = user.generateRefreshToken();
+  return res.status(200).json({ success: true, user, token, refreshToken });
+};
+
+export const refreshTokenController = async (req: Request, res: Response) => {
+  try {
+    const { refreshToken } = req.body;
+    if (!refreshToken) {
+      return res.status(400).json({ success: false, message: "Refresh token is required" });
+    }
+
+    const secret = process.env.JWT_REFRESH_SECRET_KEY || process.env.JWT_SECRET_KEY || "your-fallback-secret";
+    const decoded = jwt.verify(refreshToken, secret) as { id?: string };
+    if (!decoded?.id) {
+      return res.status(401).json({ success: false, message: "Invalid refresh token" });
+    }
+
+    const user = await usermodel.findById(decoded.id);
+    if (!user) {
+      return res.status(401).json({ success: false, message: "Invalid refresh token" });
+    }
+
+    return res.status(200).json({
+      success: true,
+      user,
+      token: user.generateToken(),
+      refreshToken: user.generateRefreshToken(),
+    });
+  } catch (error: any) {
+    return res.status(401).json({ success: false, message: error.message || "Invalid refresh token" });
+  }
 };
 
 export const profile = async (req:Request, res:Response) => {
@@ -316,92 +347,6 @@ export const updateAvatarController = async (req: Request, res: Response) => {
   }
 };
 
-export const saveFilterController = async (req: Request, res: Response) => {
-  try {
-    const userId = (req as any).user._id;
-    const { projectId, filterName, query } = req.body;
-
-    if (!projectId || !filterName || !query) {
-      return res.status(400).json({ success: false, message: "Missing required fields" });
-    }
-
-    const user = await usermodel.findById(userId);
-    if (!user) {
-      return res.status(404).json({ success: false, message: "User not found" });
-    }
-
-    if (!user.savedFilters) user.savedFilters = [];
-    user.savedFilters.push({
-      name: filterName,
-      project: projectId,
-      query
-    } as any);
-
-    await user.save();
-
-    return res.status(200).json({
-      success: true,
-      message: "Filter saved successfully",
-      savedFilters: user.savedFilters
-    });
-  } catch (error: any) {
-    return res.status(500).json({ success: false, message: error.message || "Failed to save filter" });
-  }
-};
-
-export const getSavedFiltersController = async (req: Request, res: Response) => {
-  try {
-    const userId = (req as any).user._id;
-    const { projectId } = req.params;
-
-    if (!projectId) {
-      return res.status(400).json({ success: false, message: "Project ID is required" });
-    }
-
-    const user = await usermodel.findById(userId);
-    if (!user) {
-      return res.status(404).json({ success: false, message: "User not found" });
-    }
-
-    const filters = (user.savedFilters || []).filter(f => f.project.toString() === projectId);
-
-    return res.status(200).json({
-      success: true,
-      savedFilters: filters
-    });
-  } catch (error: any) {
-    return res.status(500).json({ success: false, message: error.message || "Failed to fetch saved filters" });
-  }
-};
-
-export const deleteSavedFilterController = async (req: Request, res: Response) => {
-  try {
-    const userId = (req as any).user._id;
-    const { filterId } = req.params;
-
-    if (!filterId) {
-      return res.status(400).json({ success: false, message: "Filter ID is required" });
-    }
-
-    const user = await usermodel.findById(userId);
-    if (!user) {
-      return res.status(404).json({ success: false, message: "User not found" });
-    }
-
-    if (user.savedFilters) {
-      user.savedFilters = user.savedFilters.filter(f => (f as any)._id.toString() !== filterId);
-      await user.save();
-    }
-
-    return res.status(200).json({
-      success: true,
-      message: "Saved filter deleted successfully"
-    });
-  } catch (error: any) {
-    return res.status(500).json({ success: false, message: error.message || "Failed to delete saved filter" });
-  }
-};
-
 export const googleAuth = async (req: Request, res: Response) => {
   const { idToken, profile } = req.body;
 
@@ -469,7 +414,8 @@ export const googleAuth = async (req: Request, res: Response) => {
     }
 
     const token = user.generateToken();
-    return res.status(200).json({ success: true, user, token });
+    const refreshToken = user.generateRefreshToken();
+    return res.status(200).json({ success: true, user, token, refreshToken });
   } catch (error: any) {
     console.error("Google Auth Error:", error);
     return res.status(500).json({ success: false, message: error.message || "Internal server error" });
@@ -540,7 +486,8 @@ export const appleAuth = async (req: Request, res: Response) => {
     }
 
     const token = user.generateToken();
-    return res.status(200).json({ success: true, user, token });
+    const refreshToken = user.generateRefreshToken();
+    return res.status(200).json({ success: true, user, token, refreshToken });
   } catch (error: any) {
     console.error("Apple Auth Error:", error);
     return res.status(500).json({ success: false, message: error.message || "Internal server error" });

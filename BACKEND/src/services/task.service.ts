@@ -8,7 +8,42 @@ import { createActivityLog } from "./activity.service";
 import { calculateNextRun } from "./scheduler";
 import { parseAndNotifyMentions } from "./mention.service";
 
+const normalizeIdArray = (value: any): string[] => {
+  if (!value) return [];
+  return (Array.isArray(value) ? value : [value])
+    .map((id) => id?.toString())
+    .filter(Boolean);
+};
+
+const assertProjectTaskAccess = async (
+  projectId: string,
+  actorId?: string,
+  assigneeIds: string[] = []
+) => {
+  const project = await ProjectModel.findById(projectId);
+  if (!project) {
+    throw new Error("Project not found");
+  }
+
+  const projectMemberIds = new Set(project.members.map((member) => member.user.toString()));
+
+  if (actorId && !projectMemberIds.has(actorId.toString()) && project.createdBy.toString() !== actorId.toString()) {
+    throw new Error("User must be a project member before creating or updating tasks");
+  }
+
+  const invalidAssignees = assigneeIds.filter((id) => !projectMemberIds.has(id));
+  if (invalidAssignees.length > 0) {
+    throw new Error("Task assignees must be members of this project");
+  }
+
+  return project;
+};
+
 export const createTaskService = async (data: any) => {
+  const assignedIds = normalizeIdArray(data.assignedTo);
+  await assertProjectTaskAccess(data.project, data.createdBy?.toString(), assignedIds);
+  data.assignedTo = assignedIds;
+
   const status = data.status || "todo";
   const count = await TaskModel.countDocuments({ project: data.project, status });
   
@@ -148,6 +183,14 @@ export const updateTaskService = async (taskId: string, data: any, updaterId?: s
   const originalTask = await TaskModel.findById(taskId);
   if (!originalTask) {
     throw new Error("Task not found");
+  }
+
+  if (data.assignedTo !== undefined) {
+    const assignedIds = normalizeIdArray(data.assignedTo);
+    await assertProjectTaskAccess(originalTask.project.toString(), updaterId?.toString(), assignedIds);
+    data.assignedTo = assignedIds;
+  } else if (updaterId) {
+    await assertProjectTaskAccess(originalTask.project.toString(), updaterId.toString());
   }
 
   const { newAttachments, ...updateData } = data;
@@ -490,6 +533,16 @@ export const bulkUpdateTasksService = async (
   updateData: any,
   updaterId?: string
 ) => {
+  const assignedIds = updateData.assignedTo !== undefined ? normalizeIdArray(updateData.assignedTo) : undefined;
+
+  if (assignedIds !== undefined) {
+    const targetTasks = await TaskModel.find({ _id: { $in: taskIds } }).select("project");
+    const projectIds = Array.from(new Set(targetTasks.map((task) => task.project.toString())));
+    for (const projectId of projectIds) {
+      await assertProjectTaskAccess(projectId, updaterId?.toString(), assignedIds);
+    }
+  }
+
   const updates: any = {};
   if (updateData.status !== undefined) updates.status = updateData.status;
   if (updateData.priority !== undefined) updates.priority = updateData.priority;
@@ -499,9 +552,7 @@ export const bulkUpdateTasksService = async (
     if (updateData.isDeleted) updates.deletedAt = new Date();
   }
   if (updateData.assignedTo !== undefined) {
-    updates.assignedTo = Array.isArray(updateData.assignedTo)
-      ? updateData.assignedTo.map((id: string) => new mongoose.Types.ObjectId(id))
-      : [];
+    updates.assignedTo = assignedIds?.map((id: string) => new mongoose.Types.ObjectId(id)) || [];
   }
 
   const results = await TaskModel.updateMany(

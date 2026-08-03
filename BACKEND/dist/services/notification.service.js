@@ -12,10 +12,11 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.declineWorkspaceInvite = exports.acceptWorkspaceInvite = exports.markAllNotificationsAsRead = exports.markNotificationAsRead = exports.getUserNotifications = exports.createNotification = void 0;
+exports.declineWorkspaceInvite = exports.acceptWorkspaceInvite = exports.markAllNotificationsAsRead = exports.markNotificationAsRead = exports.getUserNotifications = exports.notifyWorkspaceManagers = exports.createNotification = void 0;
 const notification_model_1 = __importDefault(require("../model/notification.model"));
 const socket_1 = require("./socket");
 const push_service_1 = require("./push.service");
+const mongoose_1 = __importDefault(require("mongoose"));
 const workspace_model_1 = __importDefault(require("../model/workspace.model"));
 /**
  * Create a new notification, save to DB, and emit to Socket.io user room
@@ -33,6 +34,23 @@ const createNotification = (payload) => __awaiter(void 0, void 0, void 0, functi
     return notification;
 });
 exports.createNotification = createNotification;
+const notifyWorkspaceManagers = (workspaceId, senderId, payload) => __awaiter(void 0, void 0, void 0, function* () {
+    const workspace = yield workspace_model_1.default.findById(workspaceId);
+    if (!workspace)
+        return;
+    const sender = senderId.toString();
+    const managerIds = new Set();
+    managerIds.add(workspace.owner.toString());
+    for (const member of workspace.members) {
+        if (member.status === "joined" && ["owner", "admin"].includes(member.role)) {
+            managerIds.add(member.user.toString());
+        }
+    }
+    managerIds.delete(sender);
+    yield Promise.all(Array.from(managerIds).map((recipient) => (0, exports.createNotification)(Object.assign(Object.assign({}, payload), { recipient,
+        sender, workspace: workspace._id }))));
+});
+exports.notifyWorkspaceManagers = notifyWorkspaceManagers;
 /**
  * Fetch latest notifications for a specific user
  */
@@ -95,11 +113,20 @@ const acceptWorkspaceInvite = (notificationId, userId) => __awaiter(void 0, void
     if (!workspace) {
         throw new Error("Workspace not found");
     }
-    const member = workspace.members.find((m) => m.user.toString() === userId);
-    if (!member) {
-        throw new Error("You are not invited to this workspace");
+    let member = workspace.members.find((m) => m.user.toString() === userId);
+    if ((member === null || member === void 0 ? void 0 : member.status) === "joined") {
+        throw new Error("You have already joined this workspace");
     }
-    member.status = "joined";
+    if (member) {
+        member.status = "joined";
+    }
+    else {
+        workspace.members.push({
+            user: new mongoose_1.default.Types.ObjectId(userId),
+            role: "member",
+            status: "joined",
+        });
+    }
     yield workspace.save();
     notification.inviteStatus = "accepted";
     notification.read = true;
@@ -109,8 +136,20 @@ const acceptWorkspaceInvite = (notificationId, userId) => __awaiter(void 0, void
         .populate("workspace", "name logoUrl");
     if (populated) {
         (0, socket_1.emitToUser)(userId, "notification:updated", populated);
+        yield (0, exports.notifyWorkspaceManagers)(workspace._id, userId, {
+            type: "WORKSPACE_INVITE_ACCEPTED",
+            title: "Workspace Invite Accepted",
+            message: `A user accepted the invitation to join "${workspace.name}"`,
+            link: `/workspaces/${workspace._id}`,
+        });
         return populated;
     }
+    yield (0, exports.notifyWorkspaceManagers)(workspace._id, userId, {
+        type: "WORKSPACE_INVITE_ACCEPTED",
+        title: "Workspace Invite Accepted",
+        message: `A user accepted the invitation to join "${workspace.name}"`,
+        link: `/workspaces/${workspace._id}`,
+    });
     return notification;
 });
 exports.acceptWorkspaceInvite = acceptWorkspaceInvite;
@@ -143,8 +182,20 @@ const declineWorkspaceInvite = (notificationId, userId) => __awaiter(void 0, voi
         .populate("workspace", "name logoUrl");
     if (populated) {
         (0, socket_1.emitToUser)(userId, "notification:updated", populated);
+        yield (0, exports.notifyWorkspaceManagers)(workspaceId, userId, {
+            type: "WORKSPACE_INVITE_DECLINED",
+            title: "Workspace Invite Declined",
+            message: "A user declined a workspace invitation",
+            link: `/workspaces/${workspaceId}`,
+        });
         return populated;
     }
+    yield (0, exports.notifyWorkspaceManagers)(workspaceId, userId, {
+        type: "WORKSPACE_INVITE_DECLINED",
+        title: "Workspace Invite Declined",
+        message: "A user declined a workspace invitation",
+        link: `/workspaces/${workspaceId}`,
+    });
     return notification;
 });
 exports.declineWorkspaceInvite = declineWorkspaceInvite;

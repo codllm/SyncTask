@@ -32,7 +32,7 @@ function RootLayoutContent() {
 
   if (loading) {
     return (
-      <View className="flex-1 bg-dark-bg items-center justify-center" style={{ backgroundColor: "#0B0F19" }}>
+      <View className="flex-1 bg-dark-bg items-center justify-center" style={{ backgroundColor: "#15171C" }}>
         <ActivityIndicator size="large" color={themeColor} />
       </View>
     );

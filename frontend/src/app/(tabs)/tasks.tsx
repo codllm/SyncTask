@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   View,
   Text,
@@ -29,8 +29,6 @@ import {
   updateTask,
   deleteTask,
   getArchivedProjectTasks,
-  logTime,
-  deleteTimeLog,
   bulkUpdateTasks,
   getTrashTasks,
   restoreTask,
@@ -53,9 +51,6 @@ import {
   pinProjectApi,
   pinTaskApi,
   getPinnedItemsApi,
-  saveFilterApi,
-  getSavedFiltersApi,
-  deleteSavedFilterApi,
 } from "../../api/user.api";
 import {
   updateProjectColumnsApi,
@@ -755,7 +750,10 @@ const CustomFieldTextInput = ({ field, initialValue, onSave, isViewer }: any) =>
   const [val, setVal] = useState(initialValue !== undefined ? String(initialValue) : "");
 
   useEffect(() => {
-    setVal(initialValue !== undefined ? String(initialValue) : "");
+    const sync = setTimeout(() => {
+      setVal(initialValue !== undefined ? String(initialValue) : "");
+    }, 0);
+    return () => clearTimeout(sync);
   }, [initialValue]);
 
   return (
@@ -802,7 +800,10 @@ const CalendarDatePickerModal: React.FC<CalendarDatePickerModalProps> = ({
 
   useEffect(() => {
     if (visible) {
-      setViewDate(value ? new Date(value) : new Date());
+      const sync = setTimeout(() => {
+        setViewDate(value ? new Date(value) : new Date());
+      }, 0);
+      return () => clearTimeout(sync);
     }
   }, [visible, value]);
 
@@ -938,10 +939,6 @@ export default function TasksScreen() {
   const router = useRouter();
   const { user, activeProject, setActiveProject, activeWorkspace, themeColor, refreshProjects, todoMode } = useApp();
 
-  if (todoMode) {
-    return <TodoModeTasksView />;
-  }
-
   const wsMember = activeWorkspace?.members?.find((m: any) => getUserId(m.user) === user?._id);
   const isWorkspaceViewer = wsMember?.role === "viewer";
   const projMember = activeProject?.members?.find((m: any) => getUserId(m.user) === user?._id);
@@ -964,7 +961,6 @@ export default function TasksScreen() {
     detailModalVisible
   });
 
-  const estHours = selectedTask?.estimatedHours || 0;
   const [memberSearchQuery, setMemberSearchQuery] = useState("");
   const [isEditingDesc, setIsEditingDesc] = useState(false);
   const [editDescText, setEditDescText] = useState("");
@@ -998,6 +994,21 @@ export default function TasksScreen() {
     }
   };
 
+  const closeTaskDetail = useCallback(() => {
+    setDetailModalVisible(false);
+  }, []);
+
+  const taskDetailCloseResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onMoveShouldSetPanResponder: (_, gesture) => gesture.dy > 12 && Math.abs(gesture.dy) > Math.abs(gesture.dx),
+        onPanResponderRelease: (_, gesture) => {
+          if (gesture.dy > 80 || gesture.vy > 0.8) closeTaskDetail();
+        },
+      }),
+    [closeTaskDetail]
+  );
+
   // Advanced feature views states
   const [activeView, setActiveView] = useState<"board" | "calendar" | "timeline" | "workload" | "bulk" | "trash">("board");
   const [selectedTasks, setSelectedTasks] = useState<string[]>([]);
@@ -1012,12 +1023,8 @@ export default function TasksScreen() {
     actions: ConfirmDialogAction[];
   } | null>(null);
 
-  // Time logging and Start date states
-  const [estimatedHours, setEstimatedHours] = useState("0");
-  const [createEstimatedHours, setCreateEstimatedHours] = useState("0");
+  // Start date state
   const [startDate, setStartDate] = useState("");
-  const [loggedHours, setLoggedHours] = useState("");
-  const [logDescription, setLogDescription] = useState("");
   const [importModalVisible, setImportModalVisible] = useState(false);
   const [csvInputText, setCsvInputText] = useState("");
 
@@ -1057,29 +1064,6 @@ export default function TasksScreen() {
   const [newFieldName, setNewFieldName] = useState("");
   const [newFieldType, setNewFieldType] = useState<"text" | "number" | "date" | "boolean">("text");
   const [newFieldRequired, setNewFieldRequired] = useState(false);
-
-  // Saved Filters States
-  const [savedFiltersList, setSavedFiltersList] = useState<any[]>([]);
-  const [newFilterPresetName, setNewFilterPresetName] = useState("");
-  const [isSavingPreset, setIsSavingPreset] = useState(false);
-
-  const loadSavedFilters = async () => {
-    if (!activeProject) return;
-    try {
-      const res = await getSavedFiltersApi(activeProject._id);
-      if (res.success) {
-        setSavedFiltersList(res.filters);
-      }
-    } catch (err) {
-      console.error("Failed to load saved filters:", err);
-    }
-  };
-
-  useEffect(() => {
-    if (filterPanelVisible && activeProject) {
-      loadSavedFilters();
-    }
-  }, [filterPanelVisible, activeProject]);
 
   const handleAddColumn = async () => {
     if (!activeProject) return;
@@ -1219,60 +1203,6 @@ export default function TasksScreen() {
     }
   };
 
-  const handleSaveFilterPreset = async () => {
-    if (!activeProject) return;
-    if (!newFilterPresetName.trim()) {
-      Alert.alert("Error", "Preset name is required.");
-      return;
-    }
-    setIsSavingPreset(true);
-    try {
-      const query = {
-        filterAssignee,
-        filterPriority,
-        filterDueDate,
-        filterLabel,
-        sortBy,
-        sortOrder,
-      };
-      const res = await saveFilterApi({
-        name: newFilterPresetName.trim(),
-        project: activeProject._id,
-        query,
-      });
-      if (res.success) {
-        Alert.alert("Success", "Filter preset saved successfully!");
-        setNewFilterPresetName("");
-        await loadSavedFilters();
-      }
-    } catch (err: any) {
-      Alert.alert("Error", err?.response?.data?.message || "Failed to save filter preset.");
-    } finally {
-      setIsSavingPreset(false);
-    }
-  };
-
-  const handleApplyPreset = (preset: any) => {
-    const q = preset.query || {};
-    setFilterAssignee(q.filterAssignee ?? null);
-    setFilterPriority(q.filterPriority ?? null);
-    setFilterDueDate(q.filterDueDate ?? null);
-    setFilterLabel(q.filterLabel ?? null);
-    setSortBy(q.sortBy ?? "position");
-    setSortOrder(q.sortOrder ?? "asc");
-  };
-
-  const handleDeletePreset = async (filterId: string) => {
-    try {
-      const res = await deleteSavedFilterApi(filterId);
-      if (res.success) {
-        await loadSavedFilters();
-      }
-    } catch (err: any) {
-      Alert.alert("Error", err?.response?.data?.message || "Failed to delete preset.");
-    }
-  };
-
   // Archived states
   const [archivedModalVisible, setArchivedModalVisible] = useState(false);
   const [archivedTasks, setArchivedTasks] = useState<Task[]>([]);
@@ -1394,31 +1324,29 @@ export default function TasksScreen() {
   // the currently active page — there's no horizontal x-band math needed
   // anymore, since only one column is ever on screen at a time. Vertical
   // position still determines the drop index within that column.
-  const panResponder = React.useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => dragInfoRef.current.draggingTask !== null,
-      onMoveShouldSetPanResponder: () => dragInfoRef.current.draggingTask !== null,
-      onPanResponderMove: (evt, gestureState) => {
-        setDragX(gestureState.moveX);
-        setDragY(gestureState.moveY);
+  const panResponder = PanResponder.create({
+    onStartShouldSetPanResponder: () => dragInfoRef.current.draggingTask !== null,
+    onMoveShouldSetPanResponder: () => dragInfoRef.current.draggingTask !== null,
+    onPanResponderMove: (evt, gestureState) => {
+      setDragX(gestureState.moveX);
+      setDragY(gestureState.moveY);
 
-        const activeColumns = activeProject?.columns && activeProject.columns.length > 0 ? activeProject.columns : DEFAULT_BOARD_COLUMNS;
-        const pageIdx = Math.max(0, Math.min(activeColumns.length - 1, dragInfoRef.current.activeBoardPage));
-        const hoverCol = activeColumns[pageIdx].id;
-        setHoverStatus(hoverCol);
+      const activeColumns = activeProject?.columns && activeProject.columns.length > 0 ? activeProject.columns : DEFAULT_BOARD_COLUMNS;
+      const pageIdx = Math.max(0, Math.min(activeColumns.length - 1, dragInfoRef.current.activeBoardPage));
+      const hoverCol = activeColumns[pageIdx].id;
+      setHoverStatus(hoverCol);
 
-        const relativeY = Math.max(0, gestureState.moveY - 220);
-        const index = Math.floor(relativeY / 120);
-        setHoverIndex(index);
-      },
-      onPanResponderRelease: () => {
-        handleDragEnd();
-      },
-      onPanResponderTerminate: () => {
-        resetDragState();
-      },
-    })
-  ).current;
+      const relativeY = Math.max(0, gestureState.moveY - 220);
+      const index = Math.floor(relativeY / 120);
+      setHoverIndex(index);
+    },
+    onPanResponderRelease: () => {
+      handleDragEnd();
+    },
+    onPanResponderTerminate: () => {
+      resetDragState();
+    },
+  });
 
   // Create form
   const [title, setTitle] = useState("");
@@ -1446,6 +1374,7 @@ export default function TasksScreen() {
   const [comments, setComments] = useState<Comment[]>([]);
   const [newCommentContent, setNewCommentContent] = useState("");
   const [loadingComments, setLoadingComments] = useState(false);
+  const [postingComment, setPostingComment] = useState(false);
   const [uploading, setUploading] = useState(false);
 
   // Label management states
@@ -1579,14 +1508,12 @@ export default function TasksScreen() {
       title?: string;
       description?: string;
       priority?: "low" | "medium" | "high";
-      estimatedHours?: number;
       checklist?: string[];
       labels?: string[];
     }) => {
       setTitle(draft.title || title.trim());
       setDescription(draft.description || description);
       setPriority(draft.priority || "medium");
-      setCreateEstimatedHours(String(draft.estimatedHours || 3));
       setAiChecklist(draft.checklist || []);
       if (draft.labels?.length) {
         setCreateLabels((prev) => Array.from(new Set([...prev, ...draft.labels!])));
@@ -1607,7 +1534,6 @@ export default function TasksScreen() {
         title: cleanTitle,
         description: `Define the expected outcome for ${cleanTitle.toLowerCase()}, break it into clear steps, complete the core work, verify the result, and capture any follow-up decisions.`,
         priority: "medium",
-        estimatedHours: 3,
         labels: ["Planning"],
         checklist: [
           "Confirm requirements and scope",
@@ -1831,7 +1757,6 @@ export default function TasksScreen() {
         labels: createLabels,
         dependencies: createDependencies.length > 0 ? createDependencies : undefined,
         recurring: createRecurringFrequency !== "none" ? { isRecurring: true, frequency: createRecurringFrequency } : undefined,
-        estimatedHours: Number(createEstimatedHours) || undefined,
       });
       if (res.success) {
         setTitle("");
@@ -1840,7 +1765,6 @@ export default function TasksScreen() {
         setDueDate("");
         setStartDate("");
         setAssignedTo([]);
-        setCreateEstimatedHours("0");
         setAiChecklist([]);
         setAiDraftError("");
         setCreateRecurringFrequency("none");
@@ -1955,7 +1879,7 @@ export default function TasksScreen() {
     }
   };
 
-  const loadTrashTasks = async () => {
+  async function loadTrashTasks() {
     if (!activeProject) return;
     setLoadingTrash(true);
     try {
@@ -1968,7 +1892,7 @@ export default function TasksScreen() {
     } finally {
       setLoadingTrash(false);
     }
-  };
+  }
 
   const handleRestoreTaskFromTrash = async (taskId: string) => {
     try {
@@ -2029,7 +1953,7 @@ export default function TasksScreen() {
       return;
     }
     try {
-      let csvContent = "Title,Description,Status,Priority,Due Date,Start Date,Estimated Hours,Actual Hours\n";
+      let csvContent = "Title,Description,Status,Priority,Due Date,Start Date\n";
       tasks.forEach((t) => {
         const title = `"${t.title.replace(/"/g, '""')}"`;
         const desc = `"${(t.description || "").replace(/"/g, '""')}"`;
@@ -2037,9 +1961,7 @@ export default function TasksScreen() {
         const priority = t.priority;
         const due = t.dueDate ? new Date(t.dueDate).toLocaleDateString() : "";
         const start = t.startDate ? new Date(t.startDate).toLocaleDateString() : "";
-        const est = t.estimatedHours || 0;
-        const act = t.actualHours || 0;
-        csvContent += `${title},${desc},${status},${priority},${due},${start},${est},${act}\n`;
+        csvContent += `${title},${desc},${status},${priority},${due},${start}\n`;
       });
 
       const result = await Share.share({
@@ -2072,7 +1994,6 @@ export default function TasksScreen() {
           priority: (parts[3] || "medium") as any,
           dueDate: parts[4] || undefined,
           startDate: parts[5] || undefined,
-          estimatedHours: Number(parts[6]) || 0,
         };
       });
 
@@ -2085,7 +2006,6 @@ export default function TasksScreen() {
           status: t.status,
           dueDate: t.dueDate,
           startDate: t.startDate,
-          estimatedHours: t.estimatedHours,
         });
       }
 
@@ -2093,54 +2013,7 @@ export default function TasksScreen() {
       Alert.alert("Success", `Successfully imported ${parsedTasks.length} tasks.`);
     } catch (err) {
       console.error("CSV Import failed:", err);
-      Alert.alert("Import failed", "Make sure the CSV format is correct: Title,Description,Status,Priority,Due Date,Start Date,Estimated Hours");
-    }
-  };
-
-  const handleLogTime = async () => {
-    if (!selectedTask || !loggedHours || isNaN(Number(loggedHours))) {
-      Alert.alert("Invalid input", "Please enter a valid number of hours.");
-      return;
-    }
-    try {
-      const res = await logTime(selectedTask._id, Number(loggedHours), logDescription.trim());
-      if (res.success) {
-        setSelectedTask(res.task);
-        setLoggedHours("");
-        setLogDescription("");
-        await loadTasks();
-      }
-    } catch (err) {
-      console.error("Failed to log time:", err);
-      Alert.alert("Error", "Failed to log time.");
-    }
-  };
-
-  const handleDeleteTimeLog = async (logId: string) => {
-    if (!selectedTask) return;
-    try {
-      const res = await deleteTimeLog(selectedTask._id, logId);
-      if (res.success) {
-        setSelectedTask(res.task);
-        await loadTasks();
-      }
-    } catch (err) {
-      console.error("Failed to delete time log:", err);
-    }
-  };
-
-  const handleUpdateEstimate = async (est: string) => {
-    if (!selectedTask) return;
-    const estNum = Number(est);
-    if (isNaN(estNum)) return;
-    try {
-      const res = await updateTask(selectedTask._id, { estimatedHours: estNum });
-      if (res.success) {
-        setSelectedTask(res.task);
-        await loadTasks();
-      }
-    } catch (err) {
-      console.error("Failed to update estimate:", err);
+      Alert.alert("Import failed", "Make sure the CSV format is correct: Title,Description,Status,Priority,Due Date,Start Date");
     }
   };
 
@@ -2296,8 +2169,9 @@ export default function TasksScreen() {
   };
 
   const handlePostComment = async () => {
-    if (isViewer) return;
+    if (isViewer || postingComment) return;
     if (!selectedTask || !newCommentContent.trim()) return;
+    setPostingComment(true);
     try {
       const res = await createComment(selectedTask._id, newCommentContent.trim());
       if (res.success) {
@@ -2306,6 +2180,8 @@ export default function TasksScreen() {
       }
     } catch (err: any) {
       Alert.alert("Error", err?.response?.data?.message || "Failed to post comment.");
+    } finally {
+      setPostingComment(false);
     }
   };
 
@@ -2343,25 +2219,33 @@ export default function TasksScreen() {
   };
 
   const pickImage = async () => {
-    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!perm.granted) {
-      Alert.alert("Permission denied", "Media library access is required.");
-      return;
-    }
+    if (uploading) return;
+    setUploading(true);
     try {
+      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!perm.granted) {
+        Alert.alert("Permission denied", "Media library access is required.");
+        setUploading(false);
+        return;
+      }
       const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], allowsEditing: false, quality: 0.8 });
       if (!result.canceled && result.assets?.[0]) {
         const a = result.assets[0];
         const fileName = generateImageName(a.fileName);
         const mimeType = a.mimeType || "image/jpeg";
         await handleUpload(a.uri, fileName, mimeType, undefined, a.file);
+      } else {
+        setUploading(false);
       }
     } catch (err) {
       console.error("Image pick error:", err);
+      setUploading(false);
     }
   };
 
   const pickDocument = async () => {
+    if (uploading) return;
+    setUploading(true);
     try {
       const result = await DocumentPicker.getDocumentAsync({
         type: [
@@ -2382,9 +2266,12 @@ export default function TasksScreen() {
         const name = a.name || "document.pdf";
         const mimeType = a.mimeType || "application/octet-stream";
         await handleUpload(a.uri, name, mimeType, undefined, a.file);
+      } else {
+        setUploading(false);
       }
     } catch (err) {
       console.error("Document pick error:", err);
+      setUploading(false);
     }
   };
 
@@ -2509,6 +2396,11 @@ export default function TasksScreen() {
 
     await loadComments(task._id);
   };
+
+  if (todoMode) {
+    return <TodoModeTasksView />;
+  }
+
   // ── No active project ──────────────────────────────────────────────────────
   if (!activeProject) {
     return (
@@ -2516,10 +2408,10 @@ export default function TasksScreen() {
         <Ionicons name="albums-outline" size={48} color={C.textMuted} style={{ marginBottom: 16 }} />
         <Text style={[s.h2, { textAlign: "center", marginBottom: 8 }]}>No project selected</Text>
         <Text style={[s.bodyMuted, { textAlign: "center", marginBottom: 24 }]}>
-          Pick a project in the Projects tab to open the task board.
+          Select a project to view and manage its tasks.
         </Text>
         <TouchableOpacity style={[s.btn, { backgroundColor: C.accent }]} onPress={() => router.push("/(tabs)/projects")}>
-          <Text style={s.btnText}>Go to projects</Text>
+          <Text style={s.btnText}>Open Projects</Text>
         </TouchableOpacity>
       </SafeAreaView>
     );
@@ -3277,39 +3169,6 @@ export default function TasksScreen() {
             </TouchableOpacity>
           </View>
 
-          <View style={s.dividerLight} />
-          <Text style={s.filterGroupLabel}>Saved presets</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 12 }}>
-            {(savedFiltersList || []).length === 0 ? (
-              <Text style={[s.bodyMuted, { fontSize: 11, fontStyle: "italic" }]}>No saved presets yet</Text>
-            ) : (
-              (savedFiltersList || []).map((preset) => (
-                <View key={preset._id} style={s.presetChip}>
-                  <TouchableOpacity onPress={() => handleApplyPreset(preset)}>
-                    <Text style={s.presetChipText}>{preset.name}</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity onPress={() => handleDeletePreset(preset._id)} style={{ padding: 2 }}>
-                    <Ionicons name="close-circle-outline" size={14} color={C.danger} />
-                  </TouchableOpacity>
-                </View>
-              ))
-            )}
-          </ScrollView>
-
-          <View style={[s.row, { gap: 8 }]}>
-            <View style={[s.flex, s.inputWrap, { paddingVertical: 4 }]}>
-              <TextInput
-                style={[s.input, { paddingVertical: 6, fontSize: 12 }]}
-                placeholder="Preset name (e.g. My bugs)..."
-                placeholderTextColor={C.textMuted}
-                value={newFilterPresetName}
-                onChangeText={setNewFilterPresetName}
-              />
-            </View>
-            <TouchableOpacity onPress={handleSaveFilterPreset} disabled={isSavingPreset} style={[s.inlineBtn, { opacity: isSavingPreset ? 0.6 : 1 }]}>
-              <Text style={s.inlineBtnText}>Save</Text>
-            </TouchableOpacity>
-          </View>
         </View>
       )}
 
@@ -3318,7 +3177,7 @@ export default function TasksScreen() {
       {/* Undo Delete Toast Banner */}
       {showUndoBanner && undoTask && (
         <View style={s.undoBanner}>
-          <Text style={s.undoBannerText} numberOfLines={1}>"{undoTask.title}" deleted</Text>
+          <Text style={s.undoBannerText} numberOfLines={1}>{undoTask.title} deleted</Text>
           <TouchableOpacity onPress={handleUndoDelete}>
             <Text style={s.undoBannerAction}>Undo</Text>
           </TouchableOpacity>
@@ -3425,7 +3284,7 @@ export default function TasksScreen() {
                 </View>
                 <View style={s.flex}>
                   <Text style={s.aiDraftTitle}>{aiDraftLoading ? "Drafting task..." : "Draft with AI"}</Text>
-                  <Text style={s.aiDraftSubtitle}>Description, checklist, labels and estimate</Text>
+                  <Text style={s.aiDraftSubtitle}>Description, checklist and labels</Text>
                 </View>
                 <Ionicons name="chevron-forward" size={16} color={C.textMuted} />
               </TouchableOpacity>
@@ -3449,14 +3308,9 @@ export default function TasksScreen() {
                 <View style={s.aiChecklistBox}>
                   <View style={[s.row, { justifyContent: "space-between", marginBottom: 8 }]}>
                     <Text style={s.aiChecklistTitle}>Generated checklist</Text>
-                    <View style={[s.row, { gap: 10 }]}>
-                      {Number(createEstimatedHours) > 0 ? (
-                        <Text style={s.aiEstimateText}>{createEstimatedHours}h estimate</Text>
-                      ) : null}
-                      <TouchableOpacity onPress={() => setAiChecklist([])}>
-                        <Text style={s.smallActionBtnText}>Clear</Text>
-                      </TouchableOpacity>
-                    </View>
+                    <TouchableOpacity onPress={() => setAiChecklist([])}>
+                      <Text style={s.smallActionBtnText}>Clear</Text>
+                    </TouchableOpacity>
                   </View>
                   {aiChecklist.map((item, idx) => (
                     <View key={`${item}-${idx}`} style={s.aiChecklistRow}>
@@ -3640,11 +3494,11 @@ export default function TasksScreen() {
         </KeyboardAvoidingView>
       </Modal>
       {/* ── Modal: Task detail ─────────────────────────────────────────────── */}
-      <Modal visible={detailModalVisible} transparent animationType="slide" onRequestClose={() => setDetailModalVisible(false)}>
+      <Modal visible={detailModalVisible} transparent animationType="slide" onRequestClose={closeTaskDetail}>
         <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={s.flex}>
           <View style={s.detailOverlay}>
-            <TouchableOpacity style={StyleSheet.absoluteFill} onPress={() => handleBackdropPress(() => setDetailModalVisible(false))} />
-            <View style={s.detailPanel}>
+            <TouchableOpacity style={StyleSheet.absoluteFill} onPress={() => handleBackdropPress(closeTaskDetail)} />
+            <View style={s.detailPanel} {...taskDetailCloseResponder.panHandlers}>
             <View style={s.dragHandle} />
 
             {selectedTask && (
@@ -3995,116 +3849,6 @@ export default function TasksScreen() {
                     </TouchableOpacity>
                   </View>
                 )}
-
-
-
-                {/* Time Tracking */}
-                <SectionLabel>Time tracking</SectionLabel>
-                <View style={{ marginBottom: 16 }}>
-                  <View style={[s.row, { justifyContent: "space-between", alignItems: "center", marginBottom: 12 }]}>
-                    <Text style={s.bodyMuted}>Estimated hours</Text>
-                    <View style={[s.inputWrap, { width: 100, paddingVertical: 4 }]}>
-                      <TextInput
-                        style={[s.input, { paddingVertical: 4, textAlign: "center" }]}
-                        placeholder="0"
-                        placeholderTextColor={C.textMuted}
-                        keyboardType="numeric"
-                        defaultValue={estHours ? estHours.toString() : ""}
-                        onChangeText={handleUpdateEstimate}
-                        editable={!isViewer}
-                      />
-                    </View>
-                  </View>
-
-                  {estHours > 0 ? (
-                    <View style={{ marginBottom: 16 }}>
-                      <View style={[s.row, { justifyContent: "space-between", marginBottom: 6 }]}>
-                        <Text style={s.bodyMuted}>Logged vs estimate</Text>
-                        <Text style={{ color: C.textPrimary, fontSize: 13, fontWeight: "600" }}>
-                          {selectedTask.actualHours || 0} / {estHours} hrs ({Math.round(((selectedTask.actualHours || 0) / estHours) * 100)}%)
-                        </Text>
-                      </View>
-                      <View style={s.estimateTrack}>
-                        <View
-                          style={{
-                            height: "100%",
-                            width: `${Math.min(((selectedTask.actualHours || 0) / estHours) * 100, 100)}%`,
-                            backgroundColor: (selectedTask.actualHours || 0) > estHours ? C.danger : C.done,
-                            borderRadius: 4,
-                          }}
-                        />
-                      </View>
-                    </View>
-                  ) : (
-                    <Text style={[s.bodyMuted, { fontStyle: "italic", marginBottom: 12 }]}>Set estimated hours to track progress.</Text>
-                  )}
-
-                  {!isViewer && (
-                    <View style={{ marginBottom: 16, gap: 8 }}>
-                      <Text style={s.filterGroupLabel}>Log new time entry</Text>
-                      <View style={{ flexDirection: "row", gap: 8 }}>
-                        <View style={[s.inputWrap, { flex: 1, paddingVertical: 4 }]}>
-                          <TextInput
-                            style={[s.input, { paddingVertical: 6 }]}
-                            placeholder="Hours (e.g. 2.5)"
-                            placeholderTextColor={C.textMuted}
-                            keyboardType="numeric"
-                            value={loggedHours}
-                            onChangeText={setLoggedHours}
-                          />
-                        </View>
-                        <View style={[s.inputWrap, { flex: 2, paddingVertical: 4 }]}>
-                          <TextInput
-                            style={[s.input, { paddingVertical: 6 }]}
-                            placeholder="Activity description"
-                            placeholderTextColor={C.textMuted}
-                            value={logDescription}
-                            onChangeText={setLogDescription}
-                          />
-                        </View>
-                        <TouchableOpacity onPress={handleLogTime} style={[s.inlineBtn, { height: 40, minWidth: 56 }]}>
-                          <Text style={s.inlineBtnText}>Log</Text>
-                        </TouchableOpacity>
-                      </View>
-                    </View>
-                  )}
-
-                  <Text style={[s.filterGroupLabel, { marginBottom: 6 }]}>Time log history</Text>
-                  {selectedTask.timeLogs && selectedTask.timeLogs.length > 0 ? (
-                    <View style={[s.membersBox, { marginBottom: 16 }]}>
-                      {selectedTask.timeLogs.map((log: any, idx: number) => {
-                        const logDate = formatDate(log.date) || formatDate(log.createdAt);
-                        const initials = getInitials(log.loggedBy);
-                        const name = getFullName(log.loggedBy);
-                        const isMyLog = log.loggedBy?._id === user?._id || log.loggedBy === user?._id;
-                        return (
-                          <View key={log._id || idx} style={[s.memberRow, idx > 0 && { borderTopWidth: 0.5, borderTopColor: C.border }, { paddingVertical: 8 }]}>
-                            <View style={s.memberAvatar}>
-                              <Text style={s.memberAvatarText}>{initials}</Text>
-                            </View>
-                            <View style={s.flex}>
-                              <View style={[s.row, { justifyContent: "space-between", alignItems: "center" }]}>
-                                <Text style={[s.memberName, { fontWeight: "600" }]}>{log.hours} hrs</Text>
-                                <Text style={[s.bodyMuted, { fontSize: 10 }]}>{logDate}</Text>
-                              </View>
-                              <Text style={[s.memberEmail, { marginTop: 2, fontSize: 12 }]} numberOfLines={2}>
-                                {log.description || "No description"}
-                              </Text>
-                              {name ? <Text style={{ fontSize: 10, color: C.textMuted, marginTop: 1 }}>Logged by: {name}</Text> : null}
-                            </View>
-                            {!isViewer && (isMyLog || user?.role === "admin") && (
-                              <TouchableOpacity onPress={() => handleDeleteTimeLog(log._id)} style={{ padding: 4, marginLeft: 8 }}>
-                                <Ionicons name="trash-outline" size={16} color={C.danger} />
-                              </TouchableOpacity>
-                            )}
-                          </View>
-                        );
-                      })}
-                    </View>
-                  ) : (
-                    <Text style={[s.bodyMuted, { marginBottom: 16, fontStyle: "italic", fontSize: 12 }]}>No logged time entries yet.</Text>
-                  )}
-                </View>
                 {/* Checklist */}
                 <SectionLabel>
                   {`Checklist (${selectedTask.subtasks.filter((sub) => sub.completed).length}/${selectedTask.subtasks.length})`}
@@ -4299,7 +4043,7 @@ export default function TasksScreen() {
                 )}
 
                 {/* Close */}
-                <TouchableOpacity onPress={() => setDetailModalVisible(false)} style={[s.secondaryBtn, { marginTop: 8, marginBottom: 8 }]}>
+                <TouchableOpacity onPress={closeTaskDetail} style={[s.secondaryBtn, { marginTop: 8, marginBottom: 8 }]}>
                   <Text style={s.secondaryBtnText}>Close</Text>
                 </TouchableOpacity>
               </ScrollView>
@@ -4591,10 +4335,14 @@ export default function TasksScreen() {
                       </View>
                       <TouchableOpacity
                         onPress={handlePostComment}
-                        disabled={!newCommentContent.trim()}
-                        style={[s.commentSendBtn, !newCommentContent.trim() && { opacity: 0.4 }]}
+                        disabled={!newCommentContent.trim() || postingComment}
+                        style={[s.commentSendBtn, (!newCommentContent.trim() || postingComment) && { opacity: 0.4 }]}
                       >
-                        <Ionicons name="arrow-up" size={18} color={C.onAccent} />
+                        {postingComment ? (
+                          <ActivityIndicator size="small" color={C.onAccent} />
+                        ) : (
+                          <Ionicons name="arrow-up" size={18} color={C.onAccent} />
+                        )}
                       </TouchableOpacity>
                     </View>
                   )}
@@ -5022,9 +4770,6 @@ const s = StyleSheet.create({
   attachmentThumbFile: { backgroundColor: C.bg, alignItems: "center", justifyContent: "center" },
   attachmentName: { fontSize: 13, fontWeight: "600", color: C.textPrimary },
   attachmentType: { fontSize: 10, color: C.textMuted, marginTop: 2 },
-
-  // Time tracking
-  estimateTrack: { height: 8, backgroundColor: C.border, borderRadius: 4, overflow: "hidden" },
 
   // Checklist
   subtaskRow: { flexDirection: "row", alignItems: "center", paddingVertical: 11, paddingHorizontal: 12, gap: 10 },

@@ -51,7 +51,11 @@ const notificationSchema = new mongoose_1.Schema({
             "TASK_ASSIGNED",
             "TASK_UPDATED",
             "PROJECT_ADDED",
+            "PROJECT_MEMBER_ADDED",
             "WORKSPACE_INVITE",
+            "WORKSPACE_INVITE_SENT",
+            "WORKSPACE_INVITE_ACCEPTED",
+            "WORKSPACE_INVITE_DECLINED",
             "COMMENT_ADDED",
         ],
         required: true,
@@ -86,5 +90,6 @@ const notificationSchema = new mongoose_1.Schema({
 }, {
     timestamps: true,
 });
+notificationSchema.index({ recipient: 1, read: 1, createdAt: -1 });
 const Notification = mongoose_1.default.model("Notification", notificationSchema);
 exports.default = Notification;

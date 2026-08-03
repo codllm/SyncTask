@@ -1,6 +1,6 @@
 import { Router } from "express"; // Use import instead of require
 import { body } from "express-validator";
-import { signup, login, profile, logout,updateUserProfile,forgetPass, updatePreferences, togglePinProjectController, togglePinTaskController, getPinnedItemsController, updateAvatarController, saveFilterController, getSavedFiltersController, deleteSavedFilterController, googleAuth, appleAuth, registerPushTokenController, removePushTokenController, updateThemeColorController } from "../controllers/user.controller";
+import { signup, login, refreshTokenController, profile, logout,updateUserProfile,forgetPass, updatePreferences, togglePinProjectController, togglePinTaskController, getPinnedItemsController, updateAvatarController, googleAuth, appleAuth, registerPushTokenController, removePushTokenController, updateThemeColorController } from "../controllers/user.controller";
 import { userauth } from "../middleware/auth.middleware";
 import { upload } from "../middleware/upload.middleware";
 
@@ -51,6 +51,8 @@ router.post("/login", [
     body("password").isLength({ min: 3 }).withMessage("Password must be at least 3 characters long").notEmpty(),
 ], login);
 
+router.post("/refresh-token", refreshTokenController);
+
 router.post("/update", userauth, updateUserProfile);
 
 router.get('/forget-password', [
@@ -68,11 +70,8 @@ router.post("/pin-project/:projectId", userauth, togglePinProjectController);
 router.post("/pin-task/:taskId", userauth, togglePinTaskController);
 router.get("/pinned", userauth, getPinnedItemsController);
 
-// Profile avatar and saved filters routes
+// Profile avatar route
 router.put("/profile/avatar", userauth, upload.single("avatar"), updateAvatarController);
-router.post("/saved-filters", userauth, saveFilterController);
-router.get("/saved-filters/:projectId", userauth, getSavedFiltersController);
-router.delete("/saved-filters/:filterId", userauth, deleteSavedFilterController);
 
 // Push token routes
 router.post("/push-token", userauth, registerPushTokenController);

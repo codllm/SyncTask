@@ -118,4 +118,6 @@ const projectSchema = new mongoose_1.Schema({
 }, {
     timestamps: true,
 });
+projectSchema.index({ workspace: 1, isDeleted: 1 });
+projectSchema.index({ "members.user": 1 });
 exports.default = mongoose_1.default.model("Project", projectSchema);

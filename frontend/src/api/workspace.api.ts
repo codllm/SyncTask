@@ -12,6 +12,7 @@ export interface WorkspaceMember {
     profilePic?: string;
   } | string;
   role: "owner" | "admin" | "member" | "viewer";
+  status?: "joined" | "pending";
 }
 
 export interface Workspace {

@@ -105,7 +105,7 @@ export default function CreateWorkspaceScreen() {
             >
               <Text
                 style={{
-                  color: "#6366F1",
+                  color: "#F8F9FA",
                   fontSize: 16,
                   fontWeight: "600",
                 }}
@@ -121,7 +121,7 @@ export default function CreateWorkspaceScreen() {
           {/* Card */}
           <View
             style={{
-              backgroundColor: "#17171C",
+              backgroundColor: "#0D1117",
               borderWidth: 1,
               borderColor: "#25252B",
               borderRadius: 28,
@@ -131,7 +131,7 @@ export default function CreateWorkspaceScreen() {
             {/* Title */}
             <Text
               style={{
-                color: "#6366F1",
+                color: "#FFFFFF",
                 fontSize: 24,
                 fontWeight: "700",
                 marginBottom: 6,
@@ -148,8 +148,7 @@ export default function CreateWorkspaceScreen() {
                 marginBottom: 28,
               }}
             >
-              Workspaces are shared areas where teams can manage projects and
-              collaborate together.
+              Invite your team and keep everything organised in one place.
             </Text>
 
             {/* Workspace Name */}

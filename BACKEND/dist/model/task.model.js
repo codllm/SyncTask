@@ -170,5 +170,8 @@ const taskSchema = new mongoose_1.Schema({
 }, {
     timestamps: true,
 });
+taskSchema.index({ project: 1, isDeleted: 1 });
+taskSchema.index({ assignedTo: 1, isDeleted: 1 });
+taskSchema.index({ createdBy: 1 });
 const TaskModel = mongoose_1.default.model("Task", taskSchema);
 exports.default = TaskModel;

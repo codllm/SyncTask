@@ -51,7 +51,6 @@ export const seedDemoWorkspacesForUser = async (userId: string) => {
       workspace: ws1._id,
       createdBy: userId,
       color: "#95E0F9",
-      coverImageUrl: "https://res.cloudinary.com/dsxhyk1qu/image/upload/v1781708888164.png",
       members: [
         { user: userId, role: "admin" },
         { user: jane._id, role: "admin" },
@@ -153,7 +152,6 @@ export const seedDemoWorkspacesForUser = async (userId: string) => {
       workspace: ws1._id,
       createdBy: userId,
       color: "#FED7AA",
-      coverImageUrl: "https://res.cloudinary.com/dsxhyk1qu/image/upload/v1781708897790.png",
       members: [
         { user: userId, role: "admin" },
         { user: jane._id, role: "member" },
@@ -210,7 +208,6 @@ export const seedDemoWorkspacesForUser = async (userId: string) => {
       workspace: ws2._id,
       createdBy: userId,
       color: "#E8D4F5",
-      coverImageUrl: "https://res.cloudinary.com/dsxhyk1qu/image/upload/v1781708907865.png",
       members: [
         { user: userId, role: "admin" },
         { user: jane._id, role: "member" },

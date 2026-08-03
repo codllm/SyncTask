@@ -87,9 +87,11 @@ export const getWorkspaceProjectsController = async (
 ) => {
 
   try {
+    const user = (req as any).user;
 
     const projects = await getWorkspaceProjects(
-      req.params.workspaceId as string
+      req.params.workspaceId as string,
+      user._id.toString()
     );
 
     res.status(200).json({
@@ -175,10 +177,12 @@ export const addMemberToProjectController = async (
 ) => {
 
   try {
+    const user = (req as any).user;
 
     const project = await addMemberToProject(
       req.params.projectId as string,
-      req.body.userId
+      req.body.userId,
+      user._id.toString()
     );
 
     res.status(200).json({

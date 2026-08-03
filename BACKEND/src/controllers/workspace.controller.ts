@@ -144,9 +144,12 @@ export const addUserToWorkspaceController = async (
 
   try {
 
+    const user = (req as any).user;
+
     const workspace = await addUserToWorkspace(
       req.params.workspaceId as string,
-      req.body.userId
+      req.body.userId,
+      user._id
     );
 
     res.status(200).json({

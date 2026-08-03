@@ -18,6 +18,46 @@ api.interceptors.request.use(async (config) => {
   return config;
 });
 
+api.interceptors.response.use(
+  (response) => response,
+  async (error) => {
+    const originalRequest = error.config;
+    if (
+      error?.response?.status !== 401 ||
+      originalRequest?._retry ||
+      originalRequest?.url?.includes("/api/users/refresh-token")
+    ) {
+      return Promise.reject(error);
+    }
+
+    const refreshToken = await storage.getItemAsync("refreshToken");
+    if (!refreshToken) {
+      return Promise.reject(error);
+    }
+
+    originalRequest._retry = true;
+    try {
+      const res = await axios.post(`${BASE_URL}/api/users/refresh-token`, { refreshToken }, { withCredentials: true });
+      const nextToken = res.data?.token;
+      const nextRefreshToken = res.data?.refreshToken;
+      if (!nextToken) {
+        return Promise.reject(error);
+      }
+      await storage.setItemAsync("token", nextToken);
+      if (nextRefreshToken) {
+        await storage.setItemAsync("refreshToken", nextRefreshToken);
+      }
+      originalRequest.headers = originalRequest.headers || {};
+      originalRequest.headers.Authorization = `Bearer ${nextToken}`;
+      return api(originalRequest);
+    } catch (refreshErr) {
+      await storage.deleteItemAsync("token");
+      await storage.deleteItemAsync("refreshToken");
+      return Promise.reject(refreshErr);
+    }
+  }
+);
+
 export interface RegisterPayload {
   firstname: string;
   lastname: string;
@@ -75,6 +115,11 @@ export const getProfileApi = async () => {
   return { success: true, ...res.data };
 };
 
+export const refreshTokenApi = async (refreshToken: string) => {
+  const res = await api.post("/api/users/refresh-token", { refreshToken });
+  return { success: true, ...res.data };
+};
+
 export interface UpdateProfilePayload {
   firstname?: string;
   lastname?: string;
@@ -102,6 +147,7 @@ export const updateProfileApi = async (payload: UpdateProfilePayload) => {
 export const logoutApi = async () => {
   const res = await api.post("/api/users/logout");
   await storage.deleteItemAsync("token");
+  await storage.deleteItemAsync("refreshToken");
   return { success: true, ...res.data };
 };
 
@@ -133,27 +179,9 @@ export const getPinnedItemsApi = async (): Promise<{ success: boolean; pinnedPro
   return res.data;
 };
 
-// Profile avatar and saved filters endpoints
+// Profile avatar endpoint
 export const uploadAvatarApi = async (formData: FormData): Promise<{ success: boolean; avatarUrl: string; user: any }> => {
   const res = await api.put("/api/users/profile/avatar", formData);
-  return res.data;
-};
-
-export const saveFilterApi = async (payload: { name: string; project: string; query: any }): Promise<{ success: boolean; filter: any }> => {
-  const res = await api.post("/api/users/saved-filters", payload);
-  return res.data;
-};
-
-export const getSavedFiltersApi = async (projectId: string): Promise<{ success: boolean; filters: any[] }> => {
-  const res = await api.get(`/api/users/saved-filters/${projectId}`);
-  return {
-    success: res.data?.success,
-    filters: res.data?.savedFilters || [],
-  };
-};
-
-export const deleteSavedFilterApi = async (filterId: string): Promise<{ success: boolean; message: string }> => {
-  const res = await api.delete(`/api/users/saved-filters/${filterId}`);
   return res.data;
 };
 

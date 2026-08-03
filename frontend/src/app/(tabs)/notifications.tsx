@@ -56,7 +56,11 @@ const T = {
 // ─── Notification type config (recolored to theme palette) ───────────────────
 const TYPE_CONFIG: Record<string, { icon: string; iconColor: string; iconBg: string }> = {
   WORKSPACE_INVITE: { icon: "briefcase",          iconColor: "#5865F2", iconBg: "rgba(88,101,242,0.10)" },
+  WORKSPACE_INVITE_SENT: { icon: "paper-plane", iconColor: "#A5AEFF", iconBg: "rgba(165,174,255,0.10)" },
+  WORKSPACE_INVITE_ACCEPTED: { icon: "checkmark-done", iconColor: "#2BAE76", iconBg: "rgba(43,174,118,0.10)" },
+  WORKSPACE_INVITE_DECLINED: { icon: "close-circle", iconColor: "#F85149", iconBg: "rgba(248,81,73,0.10)" },
   PROJECT_ADDED:    { icon: "rocket",             iconColor: "#A5AEFF", iconBg: "rgba(165,174,255,0.10)" },
+  PROJECT_MEMBER_ADDED: { icon: "person-add", iconColor: "#A5AEFF", iconBg: "rgba(165,174,255,0.10)" },
   TASK_ASSIGNED:    { icon: "checkmark-circle",   iconColor: "#2BAE76", iconBg: "rgba(43,174,118,0.10)" },
   TASK_UPDATED:      { icon: "flash",              iconColor: "#FAA61A", iconBg: "rgba(250,166,26,0.10)" },
   COMMENT_ADDED:    { icon: "chatbubble-ellipses",iconColor: "#E093C0", iconBg: "rgba(220,80,180,0.10)" },
@@ -81,6 +85,18 @@ export default function NotificationsScreen() {
   const [loading, setLoading]     = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [activeFilter, setActiveFilter] = useState("all");
+
+  async function loadNotifications() {
+    setLoading(true);
+    try {
+      const res = await getNotifications();
+      if (res.success) setNotifications(res.notifications);
+    } catch (err) {
+      console.error("Error loading notifications:", err);
+    } finally {
+      setLoading(false);
+    }
+  }
 
   const handleAcceptInvite = async (notificationId: string) => {
     try {
@@ -116,7 +132,12 @@ export default function NotificationsScreen() {
     }
   };
 
-  useEffect(() => { loadNotifications(); }, []);
+  useEffect(() => {
+    const refresh = setTimeout(() => {
+      void loadNotifications();
+    }, 0);
+    return () => clearTimeout(refresh);
+  }, []);
 
   useEffect(() => {
     if (!socket) return;
@@ -148,18 +169,6 @@ export default function NotificationsScreen() {
       socket.off("notifications:read-all", handleNotificationsReadAll);
     };
   }, [socket, updateGlobalUnread]);
-
-  const loadNotifications = async () => {
-    setLoading(true);
-    try {
-      const res = await getNotifications();
-      if (res.success) setNotifications(res.notifications);
-    } catch (err) {
-      console.error("Error loading notifications:", err);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const onRefresh = async () => {
     setRefreshing(true);
